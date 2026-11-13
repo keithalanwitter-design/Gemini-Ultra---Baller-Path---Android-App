@@ -1,17 +1,24 @@
 package com.example
 
+import android.app.Application
 import android.content.Context
+import android.content.Intent
 import android.database.sqlite.SQLiteDatabase
+import android.net.Uri
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.lifecycle.Lifecycle
@@ -36,6 +43,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowLooper
 
@@ -706,4 +714,296 @@ class TwoAssignmentFlowRobolectricTest {
       composeRule.onNodeWithTag("reflection_input").assertTextContains(draftText, substring = true)
     }
   }
+
+  /**
+   * Pilot Fixes Check:
+   * Both privacy links (ParentConsentScreen and AccountScreen) open https://ballerpath.com/privacy,
+   * fictional player labeling stays visible, and Today -> Practice -> Reflection -> Work + Feedback
+   * lets testers reveal a clearly labeled sample coach response.
+   */
+  @Test
+  fun privacyLinks_openBallerPathPrivacyUrl_andReleaseAvailableFlowLabelsWorkEndToEnd() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val app = context as Application
+    val db = BallerPathDatabase.getInstance(context)
+    val repo = LocalBallerPathRepository(
+      reflectionDao = db.reflectionDao(),
+      practiceDraftDao = db.practiceDraftDao(),
+      assignmentDao = db.assignmentDao(),
+      setupStateDao = db.setupStateDao(),
+      parentConsentDao = db.parentConsentDao(),
+    )
+    runBlocking { repo.clearParentConsentForTest() }
+
+    ActivityScenario.launch(MainActivity::class.java).use {
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("consent_privacy_policy_link").fetchSemanticsNodes().isNotEmpty()
+      }
+
+      // 1. Privacy link on ParentConsentScreen
+      composeRule.onNodeWithTag("consent_privacy_policy_link")
+        .performScrollTo()
+        .assertTextContains("https://ballerpath.com/privacy", substring = true)
+        .performClick()
+      composeRule.waitForIdle()
+      val consentIntent = Shadows.shadowOf(app).nextStartedActivity
+      assertEquals(Intent.ACTION_VIEW, consentIntent?.action)
+      assertEquals(Uri.parse("https://ballerpath.com/privacy"), consentIntent?.data)
+
+      // Accept parent consent to enter Today
+      composeRule.onNodeWithTag("consent_checkbox_row").performScrollTo().performClick()
+      composeRule.onNodeWithTag("consent_continue_button").performScrollTo().performClick()
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("today_primary_action_button").fetchSemanticsNodes().isNotEmpty()
+      }
+
+      // 2. Fictional player badge visible on Today, walk Today -> Practice -> Reflection -> Work + Feedback
+      composeRule.onNodeWithText("Fictional Player · Sample Data").assertIsDisplayed()
+      composeRule.onNodeWithTag("today_primary_action_button").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("practice_next_button").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("practice_next_button").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("practice_next_button").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("reflection_input")
+        .performScrollTo()
+        .performTextInput("My teammate drove the lane so I held the corner window.")
+      composeRule.onNodeWithTag("submit_reflection_button").performClick()
+
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("reveal_feedback_$assign1Id").fetchSemanticsNodes().isNotEmpty()
+      }
+
+      // 3. Reveal sample coach response & verify clear sample labels
+      composeRule.onNodeWithTag("reveal_feedback_$assign1Id").performScrollTo().performClick()
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("coach_response_${assign1Id}_0").fetchSemanticsNodes().isNotEmpty()
+      }
+      composeRule.onNodeWithTag("coach_response_${assign1Id}_0")
+        .performScrollTo()
+        .assertIsDisplayed()
+      composeRule.onAllNodesWithText("SAMPLE COACH RESPONSE · COACH KEITH")
+        .onFirst()
+        .assertIsDisplayed()
+      composeRule.onAllNodesWithText("Simulated locally for prototype demo")
+        .onFirst()
+        .assertIsDisplayed()
+
+      // 4. Privacy link + Fictional Player label on AccountScreen
+      composeRule.onNodeWithTag("nav_account").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithText("Fictional Player").performScrollTo().assertIsDisplayed()
+      composeRule.onNodeWithTag("account_privacy_policy_link")
+        .performScrollTo()
+        .assertTextContains("https://ballerpath.com/privacy", substring = true)
+        .performClick()
+      composeRule.waitForIdle()
+      val accountIntent = Shadows.shadowOf(app).nextStartedActivity
+      assertEquals(Intent.ACTION_VIEW, accountIntent?.action)
+      assertEquals(Uri.parse("https://ballerpath.com/privacy"), accountIntent?.data)
+    }
+  }
+
+  @Test
+  fun workFeedback_sevenDayDevelopmentChart_displaysInteractiveBarsMetricsAndLiveSubmissions() {
+    ActivityScenario.launch(MainActivity::class.java).use {
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("nav_work_feedback").fetchSemanticsNodes().isNotEmpty()
+      }
+
+      // 1. Open Work + Feedback and scroll to the 7-day bar chart card
+      composeRule.onNodeWithTag("nav_work_feedback").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("work_feedback_list")
+        .performScrollToNode(hasTestTag("dev_stats_chart_card"))
+      composeRule.onNodeWithTag("dev_stats_chart_card").assertIsDisplayed()
+      composeRule.onNodeWithTag("dev_stats_bar_chart").assertIsDisplayed()
+
+      // Verify all 7 day bars exist and initial total is 51 min (10+8+0+14+7+12+0)
+      composeRule.onNodeWithTag("stats_total_value")
+        .performScrollTo()
+        .assertTextContains("51 min", substring = true)
+      (0..6).forEach { idx ->
+        composeRule.onNodeWithTag("stats_day_bar_$idx")
+          .performScrollTo()
+          .assertIsDisplayed()
+      }
+
+      // 2. Tap an earlier day bar (offset -3 -> index 3: 14 min / 20 reps) and verify detail card
+      composeRule.onNodeWithTag("stats_day_bar_3").performScrollTo().performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("stats_selected_day_detail")
+        .performScrollTo()
+        .assertTextContains("Spacing After the Pass", substring = true)
+        .assertTextContains("14 practice minutes", substring = true)
+
+      // 3. Toggle to Focus Reps metric and verify totals update (14+12+0+20+10+18+0 = 74 reps)
+      composeRule.onNodeWithTag("stats_metric_reps").performScrollTo().performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("stats_total_value")
+        .performScrollTo()
+        .assertTextContains("74 reps", substring = true)
+
+      // Switch back to Practice Min
+      composeRule.onNodeWithTag("stats_metric_minutes").performScrollTo().performClick()
+      composeRule.waitForIdle()
+
+      // 4. Submit Today's Pass, Look, Decide (8 min) and verify Today's bar updates live
+      composeRule.onNodeWithTag("nav_today").performClick()
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("today_primary_action_button").fetchSemanticsNodes().isNotEmpty()
+      }
+      composeRule.onNodeWithTag("today_primary_action_button").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("practice_next_button").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("practice_next_button").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("practice_next_button").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("reflection_input")
+        .performScrollTo()
+        .performTextInput("My teammate drove downhill, so I held wide spacing.")
+      composeRule.onNodeWithTag("submit_reflection_button").performClick()
+
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("work_feedback_list").fetchSemanticsNodes().isNotEmpty()
+      }
+      composeRule.onNodeWithTag("work_feedback_list")
+        .performScrollToNode(hasTestTag("dev_stats_chart_card"))
+      composeRule.onNodeWithTag("stats_total_value")
+        .performScrollTo()
+        .assertTextContains("59 min", substring = true)
+      composeRule.onNodeWithTag("stats_day_bar_6").performScrollTo().performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("stats_selected_day_detail")
+        .performScrollTo()
+        .assertTextContains("Pass, Look, Decide", substring = true)
+        .assertTextContains("Logged by Maya", substring = true)
+    }
+  }
+
+  @Test
+  fun voiceRecorder_playerJournalingTranscription_andCoachVoiceToTextFeedbackStudio_workEndToEnd() {
+    ActivityScenario.launch(MainActivity::class.java).use {
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("today_primary_action_button").fetchSemanticsNodes().isNotEmpty()
+      }
+
+      // 1. Start Today's drill and advance to the Reflection stage
+      composeRule.onNodeWithTag("today_primary_action_button").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("practice_next_button").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("practice_next_button").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("practice_next_button").performClick()
+      composeRule.waitForIdle()
+
+      // 2. Tap the Speech-to-Text microphone icon inside the reflection text input field
+      val expectedPlayerTranscript = SampleDataSource.assignmentOne.starterCues.first()
+      composeRule.onNodeWithTag("reflection_mic_button")
+        .performScrollTo()
+        .assertIsDisplayed()
+        .performClick()
+      composeRule.waitForIdle()
+
+      composeRule.onNodeWithTag("reflection_stt_listening_banner")
+        .performScrollTo()
+        .assertIsDisplayed()
+      composeRule.onNodeWithTag("reflection_input")
+        .performScrollTo()
+        .assertTextContains(expectedPlayerTranscript, substring = true)
+
+      // Tap microphone icon again to stop active Speech-to-Text listening
+      composeRule.onNodeWithTag("reflection_mic_button")
+        .performScrollTo()
+        .performClick()
+      composeRule.waitForIdle()
+
+      // Also verify the Voice Recorder & Transcription Studio card and Play Voice Note
+      composeRule.onNodeWithTag("player_voice_recorder_card")
+        .performScrollTo()
+        .assertIsDisplayed()
+      composeRule.onNodeWithTag("player_voice_record_button")
+        .performScrollTo()
+        .assertTextContains("Record & Transcribe", substring = true)
+        .performClick()
+      composeRule.waitForIdle()
+
+      composeRule.onNodeWithTag("player_voice_record_button")
+        .performScrollTo()
+        .assertTextContains("Stop & Transcribe", substring = true)
+        .performClick()
+      composeRule.waitForIdle()
+
+      // Verify transcribed speech populated the reflection input, saved the draft, and enabled Play Voice Note
+      composeRule.onNodeWithTag("reflection_input")
+        .performScrollTo()
+        .assertTextContains(expectedPlayerTranscript, substring = true)
+      composeRule.onNodeWithTag("draft_saved_indicator")
+        .performScrollTo()
+        .assertIsDisplayed()
+      composeRule.onNodeWithTag("player_voice_play_button")
+        .performScrollTo()
+        .assertIsDisplayed()
+
+      // Submit the voice-transcribed reflection
+      composeRule.onNodeWithTag("submit_reflection_button").performClick()
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("awaiting_card_$assign1Id").fetchSemanticsNodes().isNotEmpty()
+      }
+
+      // 3. Open Coach Keith Voice-to-Text & Feedback Studio in Awaiting coach
+      composeRule.onNodeWithTag("toggle_coach_studio_$assign1Id")
+        .performScrollTo()
+        .assertIsDisplayed()
+        .performClick()
+      composeRule.waitForIdle()
+
+      composeRule.onNodeWithTag("coach_feedback_studio_$assign1Id")
+        .performScrollTo()
+        .assertIsDisplayed()
+
+      // Start & stop Coach Keith voice dictation
+      composeRule.onNodeWithTag("coach_voice_record_$assign1Id")
+        .performScrollTo()
+        .assertTextContains("Dictate Coach Note", substring = true)
+        .performClick()
+      composeRule.waitForIdle()
+
+      composeRule.onNodeWithTag("coach_voice_record_$assign1Id")
+        .performScrollTo()
+        .assertTextContains("Stop & Transcribe Coach Note", substring = true)
+        .performClick()
+      composeRule.waitForIdle()
+
+      // Verify Coach Keith's voice note transcribed into the feedback input and Save works
+      composeRule.onNodeWithTag("coach_response_input_$assign1Id")
+        .performScrollTo()
+        .assertTextContains("Voice note from Coach Keith", substring = true)
+      composeRule.onNodeWithTag("save_custom_coach_feedback_$assign1Id")
+        .performScrollTo()
+        .performClick()
+
+      // 4. Verify transition to Coach responded with the transcribed coach note and Listen button
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("responded_card_$assign1Id").fetchSemanticsNodes().isNotEmpty()
+      }
+      composeRule.onNodeWithTag("coach_response_${assign1Id}_0")
+        .performScrollTo()
+        .assertIsDisplayed()
+      composeRule.onNodeWithText("Voice note from Coach Keith", substring = true)
+        .performScrollTo()
+        .assertIsDisplayed()
+      composeRule.onNodeWithTag("listen_coach_response_${assign1Id}_0")
+        .performScrollTo()
+        .assertIsDisplayed()
+        .performClick()
+      composeRule.waitForIdle()
+    }
+  }
 }
+

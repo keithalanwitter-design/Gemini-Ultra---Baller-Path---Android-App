@@ -1,16 +1,20 @@
 package com.example.data.sample
 
-import com.example.BuildConfig
 import com.example.data.local.AssignmentEntity
 import com.example.data.local.ReflectionEntity
 import com.example.data.model.CoachAssignment
+import com.example.data.model.DailyDevelopmentStat
 import com.example.data.model.DevelopmentPlan
 import com.example.data.model.PlanSession
 import com.example.data.model.PlayerProfile
+import com.example.data.model.PracticeReflection
 import com.example.data.model.PracticeStep
 import com.example.data.model.SessionStatus
 import com.example.data.model.SimulatedFamilyProfile
 import com.example.data.model.TodayFocus
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 object SampleDataSource {
 
@@ -29,18 +33,14 @@ object SampleDataSource {
     grade = "7th grade",
     position = "Guard",
     coachName = "Coach Keith",
-    demoBadgeLabel = if (BuildConfig.DEBUG) "Fictional Player · Sample Data" else "",
+    demoBadgeLabel = "Fictional Player · Sample Data",
   )
 
   val simulatedFamily = SimulatedFamilyProfile(
     parentName = "Avery Pine",
     relationshipLabel = "Parent / Family",
-    householdLabel = if (BuildConfig.DEBUG) "Simulated Family Profile · Local Demo" else "Baller Path Family",
-    scopeNotice = if (BuildConfig.DEBUG) {
-      "Authentication, billing, and real player accounts are intentionally kept outside this prototype."
-    } else {
-      "Your family account and weekly plan are guided by Coach Keith."
-    },
+    householdLabel = "Simulated Family Profile · Local Demo",
+    scopeNotice = "Authentication, billing, and real player accounts are intentionally kept outside this offline pilot build.",
   )
 
   val developmentPlan = DevelopmentPlan(
@@ -298,7 +298,7 @@ object SampleDataSource {
   )
 
   val fixtureCoachLabel: String
-    get() = if (BuildConfig.DEBUG) "Sample Coach Response · Coach Keith" else "Coach Keith"
+    get() = "Sample Coach Response · Coach Keith"
   const val FIXTURE_DRAFT_TEXT = "My teammate started to drive, so I stayed wide"
   const val FIXTURE_SUBMITTED_TEXT = "My teammate started to drive, so I stayed wide to give them room."
   const val FIXTURE_COACH_RESPONSE =
@@ -319,7 +319,7 @@ object SampleDataSource {
       drillId = "w2_d1_target_pass",
       drillTitle = "Target Pass & Eyes Up",
       laneObservation = "When I lifted my chin right on the catch, I saw the cutter cross the free-throw line before my defender recovered.",
-      readTag = if (BuildConfig.DEBUG) "Day 1 Sample Entry" else "Day 1 Check-In",
+      readTag = "Day 1 Sample Entry",
       createdAtMillis = nowMillis - 2L * 24L * 60L * 60L * 1000L,
       sampleCoachLabel = fixtureCoachLabel,
       sampleCoachResponse = "Great catch-and-scan timing, Maya. Raising your eyes before squaring up bought you an extra half-second to see the middle seam.",
@@ -357,6 +357,82 @@ object SampleDataSource {
       else -> {
         FIXTURE_COACH_RESPONSE to FIXTURE_NEXT_ADJUSTMENT
       }
+    }
+  }
+
+  private data class SampleDayBaseline(
+    val practiceMinutes: Int,
+    val focusReps: Int,
+    val focusTag: String,
+  )
+
+  private val sevenDaySampleBaselines = mapOf(
+    -6 to SampleDayBaseline(10, 14, "Two-Ball Eyes Up"),
+    -5 to SampleDayBaseline(8, 12, "Pocket Pound & Scan"),
+    -4 to SampleDayBaseline(0, 0, "Recovery / Rest Day"),
+    -3 to SampleDayBaseline(14, 20, "Spacing After the Pass"),
+    -2 to SampleDayBaseline(7, 10, "Target Pass & Eyes Up"),
+    -1 to SampleDayBaseline(12, 18, "Corner Sightline Footwork"),
+    0 to SampleDayBaseline(0, 0, "Ready for Today's Drill"),
+  )
+
+  fun buildLastSevenDayStats(
+    assignments: List<CoachAssignment>,
+    reflections: List<PracticeReflection>,
+    nowMillis: Long = System.currentTimeMillis(),
+  ): List<DailyDevelopmentStat> {
+    val assignmentMinutesById = assignments.associate { it.assignmentId to it.totalMinutes }
+    val todayMidnight = Calendar.getInstance().apply {
+      timeInMillis = nowMillis
+      set(Calendar.HOUR_OF_DAY, 0)
+      set(Calendar.MINUTE, 0)
+      set(Calendar.SECOND, 0)
+      set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+    val dayMillis = 24L * 60L * 60L * 1000L
+    val shortDayFormat = SimpleDateFormat("EEE", Locale.getDefault())
+    val fullDateFormat = SimpleDateFormat("MMM d", Locale.getDefault())
+
+    val nonSeedReflectionsByOffset = reflections
+      .filter { !it.isSampleSeed }
+      .groupBy { reflection ->
+        val refCal = Calendar.getInstance().apply {
+          timeInMillis = reflection.createdAtMillis
+          set(Calendar.HOUR_OF_DAY, 0)
+          set(Calendar.MINUTE, 0)
+          set(Calendar.SECOND, 0)
+          set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        ((refCal - todayMidnight) / dayMillis).toInt()
+      }
+
+    return (-6..0).map { offset ->
+      val dayTimestamp = todayMidnight + offset * dayMillis
+      val baseline = sevenDaySampleBaselines[offset] ?: SampleDayBaseline(0, 0, "Court Work")
+      val liveEntries = nonSeedReflectionsByOffset[offset].orEmpty()
+      val liveMinutes = liveEntries.sumOf { entry ->
+        assignmentMinutesById[entry.assignmentId] ?: 8
+      }
+      val liveReps = liveEntries.size * 12
+      val liveTitle = liveEntries.firstOrNull()?.drillTitle
+
+      val dayLabel = if (offset == 0) {
+        "Today"
+      } else {
+        shortDayFormat.format(dayTimestamp)
+      }
+      val fullDateLabel = fullDateFormat.format(dayTimestamp)
+
+      DailyDevelopmentStat(
+        dayOffsetFromToday = offset,
+        dayLabel = dayLabel,
+        fullDateLabel = fullDateLabel,
+        practiceMinutes = baseline.practiceMinutes + liveMinutes,
+        focusReps = baseline.focusReps + liveReps,
+        focusTag = liveTitle ?: baseline.focusTag,
+        hasLiveSubmission = liveEntries.isNotEmpty(),
+      )
     }
   }
 }

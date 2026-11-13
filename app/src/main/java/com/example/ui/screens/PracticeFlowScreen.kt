@@ -51,6 +51,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,6 +71,8 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.ui.components.CoachKeithAvatar
 import com.example.ui.components.FictionalDemoBadge
+import com.example.ui.components.ReflectionSpeechToTextMicButton
+import com.example.ui.components.VoiceRecorderStudioCard
 import com.example.ui.theme.BurntOrange
 import com.example.ui.theme.NavyDeep
 import com.example.ui.viewmodel.BallerPathUiState
@@ -497,6 +503,15 @@ fun PracticeFlowScreen(
             }
           }
 
+          VoiceRecorderStudioCard(
+            sessionKey = "player_${assignment.assignmentId}",
+            currentText = practice.reflectionDraft,
+            defaultTranscribedText = assignment.starterCues.firstOrNull()
+              ?: "My teammate started to drive, so I stayed wide to give them room.",
+            quickVoicePhrases = assignment.starterCues.drop(1),
+            onTranscribedText = onReflectionChanged,
+          )
+
           Text(
             text = "Tap a quick starter or write your own:",
             style = MaterialTheme.typography.labelMedium,
@@ -532,6 +547,25 @@ fun PracticeFlowScreen(
             }
           }
 
+          var isFieldSttListening by remember(assignment.assignmentId) { mutableStateOf(false) }
+
+          if (isFieldSttListening) {
+            Surface(
+              modifier = Modifier
+                .fillMaxWidth()
+                .testTag("reflection_stt_listening_banner"),
+              shape = MaterialTheme.shapes.small,
+              color = NavyDeep,
+            ) {
+              Text(
+                text = stringResource(R.string.reflection_stt_listening_hint),
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+              )
+            }
+          }
+
           OutlinedTextField(
             value = practice.reflectionDraft,
             onValueChange = onReflectionChanged,
@@ -542,6 +576,17 @@ fun PracticeFlowScreen(
             label = { Text("What you noticed & chose") },
             placeholder = {
               Text("Example: ${assignment.starterCues.firstOrNull().orEmpty()}")
+            },
+            trailingIcon = {
+              ReflectionSpeechToTextMicButton(
+                sessionKey = "field_stt_${assignment.assignmentId}",
+                promptText = assignment.reflectionPrompt,
+                currentText = practice.reflectionDraft,
+                defaultTranscribedText = assignment.starterCues.firstOrNull()
+                  ?: "My teammate started to drive, so I stayed wide to give them room.",
+                onTranscribedText = onReflectionChanged,
+                onListeningChanged = { isFieldSttListening = it },
+              )
             },
             textStyle = MaterialTheme.typography.bodyLarge,
             minLines = 4,

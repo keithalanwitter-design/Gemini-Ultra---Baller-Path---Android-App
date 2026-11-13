@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.ui.components.CoachKeithAvatar
+import com.example.ui.components.PrivacyPolicyLinkCard
 import com.example.ui.theme.BurntOrange
 import com.example.ui.theme.BurntOrangeTint
 import com.example.ui.theme.NavyDeep
@@ -255,27 +256,10 @@ fun ParentConsentScreen(
         )
       }
 
-      Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-      ) {
-        Column(
-          modifier = Modifier.padding(12.dp),
-          verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-          Text(
-            text = stringResource(R.string.privacy_policy_label),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
-          Text(
-            text = stringResource(R.string.privacy_policy_url),
-            style = MaterialTheme.typography.bodySmall,
-            color = NavyDeep,
-          )
-        }
-      }
+      PrivacyPolicyLinkCard(
+        linkTestTag = "consent_privacy_policy_link",
+        urlTestTag = "consent_privacy_policy_url",
+      )
     }
   }
 }

@@ -18,14 +18,13 @@ This document summarizes the Play Console configuration, Data safety answers, pr
 
 ---
 
-## 2. Placeholder Privacy Policy URL (Replace Before Play Upload)
+## 2. Privacy Policy Link (`https://ballerpath.com/privacy`)
 
-The placeholder URL is declared once in `app/src/main/res/values/strings.xml` and displayed in both `ParentConsentScreen` and the `Account` tab (`Privacy & Parent Permission` card):
+The privacy policy URL is declared in `app/src/main/res/values/strings.xml` and wired as a clickable external browser link (`Intent.ACTION_VIEW`) on both `ParentConsentScreen` and the `Account` tab (`Privacy & Parent Permission` card):
 
 - **String resource:** `privacy_policy_url` in `app/src/main/res/values/strings.xml`
-- **Current placeholder value:** `https://ballerpath.com/privacy-policy-placeholder`
-
-Replace that URL with your live privacy policy URL before publishing to Google Play Console or running an internal/closed test track targeting families or minors.
+- **URL:** `https://ballerpath.com/privacy`
+- **Release Pilot Labeling:** Both debug and release builds clearly badge Maya Brooks as `Fictional Player · Sample Data` / `Fictional Player`, label Avery Pine as a simulated household, and expose `Demo: Reveal Sample Coach Response` (`SAMPLE COACH RESPONSE · COACH KEITH` / `Simulated locally for prototype demo`) on `Work + Feedback` so pilot testers can inspect the complete loop offline. `More work ready` and the `Demo Scenario Switcher` remain gated behind `BuildConfig.DEBUG`.
 
 ---
 

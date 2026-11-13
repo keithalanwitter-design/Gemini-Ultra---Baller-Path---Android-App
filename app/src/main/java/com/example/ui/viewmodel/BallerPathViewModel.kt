@@ -9,6 +9,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import com.example.data.model.AssignmentStatus
 import com.example.data.model.AssignmentWorkItem
 import com.example.data.model.CoachAssignment
+import com.example.data.model.DailyDevelopmentStat
 import com.example.data.model.DevelopmentPlan
 import com.example.data.model.ParentConsentState
 import com.example.data.model.PlanSession
@@ -235,6 +236,12 @@ data class BallerPathUiState(
           }
         }
     }
+
+  val lastSevenDayStats: List<DailyDevelopmentStat>
+    get() = SampleDataSource.buildLastSevenDayStats(
+      assignments = assignments,
+      reflections = reflections,
+    )
 }
 
 class BallerPathViewModel(
@@ -619,6 +626,22 @@ class BallerPathViewModel(
   fun revealSampleCoachResponse(reflectionId: Long) {
     viewModelScope.launch {
       repository.revealSampleCoachResponse(reflectionId)
+    }
+  }
+
+  fun saveCustomCoachFeedback(
+    reflectionId: Long,
+    coachResponse: String,
+    nextAdjustment: String,
+    onSaved: () -> Unit = {},
+  ) {
+    viewModelScope.launch {
+      repository.saveCustomCoachFeedback(
+        reflectionId = reflectionId,
+        coachResponse = coachResponse,
+        nextAdjustment = nextAdjustment,
+      )
+      onSaved()
     }
   }
 

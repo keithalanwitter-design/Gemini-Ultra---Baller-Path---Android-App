@@ -57,7 +57,10 @@ import com.example.data.model.AssignmentWorkItem
 import com.example.data.model.PracticeReflection
 import com.example.data.model.SetupStage
 import com.example.data.model.WorkFeedbackTab
+import com.example.ui.components.CoachAudioListenButton
+import com.example.ui.components.CoachFeedbackStudioSection
 import com.example.ui.components.CoachKeithAvatar
+import com.example.ui.components.DevelopmentStatsChartCard
 import com.example.ui.components.FictionalDemoBadge
 import com.example.ui.components.HeadlineVisualBanner
 import com.example.ui.components.PlayerHeaderBar
@@ -76,6 +79,7 @@ fun WorkFeedbackScreen(
   onSelectTab: (WorkFeedbackTab) -> Unit,
   onStartOrResumeAssignment: (String) -> Unit,
   onRevealSampleFeedback: (Long) -> Unit,
+  onSaveCustomCoachFeedback: (reflectionId: Long, coachResponse: String, nextAdjustment: String) -> Unit = { _, _, _ -> },
   modifier: Modifier = Modifier,
 ) {
   val setupStage = uiState.setupState.setupStage
@@ -108,7 +112,7 @@ fun WorkFeedbackScreen(
         PlayerHeaderBar(
           playerName = uiState.player.displayName,
           jerseyAndPosition = "${uiState.player.position} · ${uiState.player.grade}",
-          demoBadgeLabel = if (BuildConfig.DEBUG) uiState.currentScenario.label else "",
+          demoBadgeLabel = if (BuildConfig.DEBUG) uiState.currentScenario.label else uiState.player.demoBadgeLabel,
         )
       }
 
@@ -225,6 +229,9 @@ fun WorkFeedbackScreen(
                     playerName = uiState.player.displayName,
                     reviewLabel = uiState.developmentPlan.reviewLabel,
                     onRevealSampleFeedback = { onRevealSampleFeedback(latest.id) },
+                    onSaveCustomCoachFeedback = { coachResponse, nextAdjustment ->
+                      onSaveCustomCoachFeedback(latest.id, coachResponse, nextAdjustment)
+                    },
                   )
                 }
               }
@@ -251,6 +258,9 @@ fun WorkFeedbackScreen(
                   submissions = item.submissions,
                   playerName = uiState.player.displayName,
                   isSampleSeed = false,
+                  onSaveCustomCoachFeedback = { reflectionId, coachResponse, nextAdjustment ->
+                    onSaveCustomCoachFeedback(reflectionId, coachResponse, nextAdjustment)
+                  },
                 )
               }
 
@@ -268,6 +278,13 @@ fun WorkFeedbackScreen(
               }
             }
           }
+        }
+
+        item {
+          DevelopmentStatsChartCard(
+            stats = uiState.lastSevenDayStats,
+            playerFirstName = uiState.player.firstName,
+          )
         }
       }
 
@@ -480,6 +497,7 @@ private fun AwaitingCoachAssignmentCard(
   playerName: String,
   reviewLabel: String,
   onRevealSampleFeedback: () -> Unit,
+  onSaveCustomCoachFeedback: (coachResponse: String, nextAdjustment: String) -> Unit,
 ) {
   val dateFormatter = SimpleDateFormat("MMM d · h:mm a", Locale.getDefault())
   val timestampLabel = dateFormatter.format(Date(reflection.createdAtMillis))
@@ -558,55 +576,61 @@ private fun AwaitingCoachAssignmentCard(
         }
       }
 
-      if (BuildConfig.DEBUG) {
-        Surface(
-          modifier = Modifier.fillMaxWidth(),
-          shape = MaterialTheme.shapes.medium,
-          color = MaterialTheme.colorScheme.primaryContainer,
-          border = BorderStroke(1.dp, BurntOrange.copy(alpha = 0.5f)),
+      Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        border = BorderStroke(1.dp, BurntOrange.copy(alpha = 0.5f)),
+      ) {
+        Column(
+          modifier = Modifier.padding(12.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+          Text(
+            text = "PROTOTYPE DEMO CONTROL",
+            style = MaterialTheme.typography.labelSmall,
+            color = BurntOrange,
+          )
+          Text(
+            text = "Want to preview what appears after Coach Keith replies?",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+          )
+          OutlinedButton(
+            onClick = onRevealSampleFeedback,
+            modifier = Modifier
+              .fillMaxWidth()
+              .defaultMinSize(minHeight = 48.dp)
+              .semantics {
+                contentDescription = "Demo: Reveal sample Coach Keith response for ${workItem.assignment.title}"
+              }
+              .testTag("reveal_feedback_${workItem.assignment.assignmentId}"),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.5.dp, BurntOrange),
           ) {
+            Icon(
+              imageVector = Icons.Filled.Visibility,
+              contentDescription = null,
+              tint = BurntOrange,
+              modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
-              text = "PROTOTYPE DEMO CONTROL",
-              style = MaterialTheme.typography.labelSmall,
+              text = "Demo: Reveal Sample Coach Response",
+              style = MaterialTheme.typography.labelLarge,
               color = BurntOrange,
             )
-            Text(
-              text = "Want to preview what appears after Coach Keith replies?",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            OutlinedButton(
-              onClick = onRevealSampleFeedback,
-              modifier = Modifier
-                .fillMaxWidth()
-                .defaultMinSize(minHeight = 48.dp)
-                .semantics {
-                  contentDescription = "Demo: Reveal sample Coach Keith response for ${workItem.assignment.title}"
-                }
-                .testTag("reveal_feedback_${workItem.assignment.assignmentId}"),
-              shape = RoundedCornerShape(12.dp),
-              border = BorderStroke(1.5.dp, BurntOrange),
-            ) {
-              Icon(
-                imageVector = Icons.Filled.Visibility,
-                contentDescription = null,
-                tint = BurntOrange,
-                modifier = Modifier.size(18.dp),
-              )
-              Spacer(modifier = Modifier.width(8.dp))
-              Text(
-                text = "Demo: Reveal Sample Coach Response",
-                style = MaterialTheme.typography.labelLarge,
-                color = BurntOrange,
-              )
-            }
           }
         }
       }
+
+      CoachFeedbackStudioSection(
+        assignmentId = workItem.assignment.assignmentId,
+        drillTitle = workItem.assignment.title,
+        initialCoachResponse = reflection.sampleCoachResponse,
+        initialNextAdjustment = reflection.nextAdjustment,
+        onSaveCoachFeedback = onSaveCustomCoachFeedback,
+      )
     }
   }
 }
@@ -619,6 +643,7 @@ private fun CoachRespondedAssignmentCard(
   submissions: List<PracticeReflection>,
   playerName: String,
   isSampleSeed: Boolean,
+  onSaveCustomCoachFeedback: (reflectionId: Long, coachResponse: String, nextAdjustment: String) -> Unit = { _, _, _ -> },
 ) {
   val dateFormatter = SimpleDateFormat("MMM d · h:mm a", Locale.getDefault())
   val latest = submissions.first()
@@ -656,7 +681,7 @@ private fun CoachRespondedAssignmentCard(
           )
           Text(
             text = if (isSampleSeed) {
-              "${if (BuildConfig.DEBUG) latest.readTag else "Day 1 Check-In"} · $timestampLabel"
+              "${latest.readTag} · $timestampLabel"
             } else {
               "Coach responded · $timestampLabel"
             },
@@ -666,9 +691,9 @@ private fun CoachRespondedAssignmentCard(
         }
         FictionalDemoBadge(
           text = if (isSampleSeed) {
-            if (BuildConfig.DEBUG) "Sample Seed" else "Completed"
+            "Sample Seed"
           } else {
-            "Coach Responded"
+            "Sample Coach Response"
           },
           modifier = Modifier.align(Alignment.CenterVertically),
         )
@@ -711,6 +736,9 @@ private fun CoachRespondedAssignmentCard(
               SampleCoachResponseBox(
                 label = entry.sampleCoachLabel,
                 response = entry.sampleCoachResponse,
+                nextAdjustment = entry.nextAdjustment,
+                listenSessionKey = "${assignmentId}_$index",
+                listenTestTag = "listen_coach_response_${assignmentId}_$index",
                 testTag = "coach_response_${assignmentId}_$index",
                 modifier = Modifier.weight(1f),
               )
@@ -728,6 +756,9 @@ private fun CoachRespondedAssignmentCard(
               SampleCoachResponseBox(
                 label = entry.sampleCoachLabel,
                 response = entry.sampleCoachResponse,
+                nextAdjustment = entry.nextAdjustment,
+                listenSessionKey = "${assignmentId}_$index",
+                listenTestTag = "listen_coach_response_${assignmentId}_$index",
                 testTag = "coach_response_${assignmentId}_$index",
                 modifier = Modifier.fillMaxWidth(),
               )
@@ -769,6 +800,19 @@ private fun CoachRespondedAssignmentCard(
             }
           }
         }
+      }
+
+      if (!isSampleSeed) {
+        CoachFeedbackStudioSection(
+          assignmentId = assignmentId,
+          drillTitle = drillTitle,
+          initialCoachResponse = latest.sampleCoachResponse,
+          initialNextAdjustment = latest.nextAdjustment,
+          toggleButtonLabelOpen = "Update Coach Feedback (Voice or Text)",
+          onSaveCoachFeedback = { updatedResponse, updatedNextRep ->
+            onSaveCustomCoachFeedback(latest.id, updatedResponse, updatedNextRep)
+          },
+        )
       }
     }
   }
@@ -816,6 +860,9 @@ private fun PlayerObservationBox(
 private fun SampleCoachResponseBox(
   label: String,
   response: String,
+  nextAdjustment: String,
+  listenSessionKey: String,
+  listenTestTag: String,
   testTag: String,
   modifier: Modifier = Modifier,
 ) {
@@ -829,17 +876,22 @@ private fun SampleCoachResponseBox(
       verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
       Row(
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
       ) {
-        CoachKeithAvatar(sizeDp = 30)
-        Column {
-          Text(
-            text = if (BuildConfig.DEBUG) label.uppercase() else "COACH KEITH",
-            style = MaterialTheme.typography.labelSmall,
-            color = BurntOrange,
-          )
-          if (BuildConfig.DEBUG) {
+        Row(
+          modifier = Modifier.weight(1f),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          CoachKeithAvatar(sizeDp = 30)
+          Column {
+            Text(
+              text = label.uppercase(),
+              style = MaterialTheme.typography.labelSmall,
+              color = BurntOrange,
+            )
             Text(
               text = "Simulated locally for prototype demo",
               style = MaterialTheme.typography.bodySmall,
@@ -847,6 +899,11 @@ private fun SampleCoachResponseBox(
             )
           }
         }
+        CoachAudioListenButton(
+          sessionKey = listenSessionKey,
+          textToSpeak = "$response. Try the next rep: $nextAdjustment",
+          testTag = listenTestTag,
+        )
       }
       Text(
         text = response,

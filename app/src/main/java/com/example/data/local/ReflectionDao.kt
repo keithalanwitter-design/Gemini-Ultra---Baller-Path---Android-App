@@ -20,6 +20,23 @@ interface ReflectionDao {
   @Query("UPDATE practice_reflections SET isCoachResponseRevealed = :revealed WHERE id = :id")
   suspend fun setCoachResponseRevealed(id: Long, revealed: Boolean)
 
+  @Query(
+    """
+    UPDATE practice_reflections
+    SET sampleCoachResponse = :coachResponse,
+        nextAdjustment = :nextAdjustment,
+        sampleCoachLabel = :coachLabel,
+        isCoachResponseRevealed = 1
+    WHERE id = :id
+    """
+  )
+  suspend fun updateCoachFeedback(
+    id: Long,
+    coachResponse: String,
+    nextAdjustment: String,
+    coachLabel: String,
+  )
+
   @Query("DELETE FROM practice_reflections")
   suspend fun clearAll()
 }

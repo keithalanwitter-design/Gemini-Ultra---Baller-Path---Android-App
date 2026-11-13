@@ -56,6 +56,7 @@ import com.example.data.model.SetupStage
 import com.example.data.model.WorkflowScenarioId
 import com.example.ui.components.CoachKeithAvatar
 import com.example.ui.components.FictionalDemoBadge
+import com.example.ui.components.PrivacyPolicyLinkCard
 import com.example.ui.theme.BurntOrange
 import com.example.ui.theme.NavyDeep
 import com.example.ui.viewmodel.BallerPathUiState
@@ -176,11 +177,7 @@ fun AccountScreen(
                 color = Color.White,
               )
               Text(
-                text = if (BuildConfig.DEBUG) {
-                  "${uiState.family.relationshipLabel} · Fictional demo household"
-                } else {
-                  uiState.family.relationshipLabel
-                },
+                text = "${uiState.family.relationshipLabel} · Fictional demo household",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White.copy(alpha = 0.8f),
               )
@@ -211,13 +208,11 @@ fun AccountScreen(
                   color = Color.White.copy(alpha = 0.82f),
                 )
               }
-              if (BuildConfig.DEBUG) {
-                Spacer(modifier = Modifier.width(8.dp))
-                FictionalDemoBadge(
-                  text = "Fictional Player",
-                  onDarkBackground = true,
-                )
-              }
+              Spacer(modifier = Modifier.width(8.dp))
+              FictionalDemoBadge(
+                text = "Fictional Player",
+                onDarkBackground = true,
+              )
             }
           }
         }
@@ -404,11 +399,7 @@ fun AccountScreen(
               color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-              text = if (BuildConfig.DEBUG) {
-                "Responses revealed via the demo control are prewritten local sample responses for this prototype."
-              } else {
-                "Coach Keith builds your weekly plan, assigns drills, and reviews your reflections."
-              },
+              text = "Responses revealed via the demo control are prewritten local sample responses for this offline pilot.",
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -504,28 +495,10 @@ fun AccountScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
-          Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.small,
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
-          ) {
-            Column(
-              modifier = Modifier.padding(10.dp),
-              verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-              Text(
-                text = stringResource(R.string.privacy_policy_label),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-              Text(
-                text = stringResource(R.string.privacy_policy_url),
-                style = MaterialTheme.typography.bodySmall,
-                color = NavyDeep,
-                modifier = Modifier.testTag("account_privacy_policy_url"),
-              )
-            }
-          }
+          PrivacyPolicyLinkCard(
+            linkTestTag = "account_privacy_policy_link",
+            urlTestTag = "account_privacy_policy_url",
+          )
         }
       }
 

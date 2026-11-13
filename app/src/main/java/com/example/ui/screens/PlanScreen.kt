@@ -86,7 +86,7 @@ fun PlanScreen(
       PlayerHeaderBar(
         playerName = uiState.player.displayName,
         jerseyAndPosition = "${uiState.player.position} · ${uiState.player.grade}",
-        demoBadgeLabel = if (BuildConfig.DEBUG) "Sample Plan · ${uiState.currentScenario.label}" else "",
+        demoBadgeLabel = if (BuildConfig.DEBUG) "Sample Plan · ${uiState.currentScenario.label}" else "Fictional Player · Sample Plan",
       )
 
       when (setupStage) {

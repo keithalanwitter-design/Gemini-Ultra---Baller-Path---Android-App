@@ -278,6 +278,9 @@ class BallerPathFlowRobolectricTest {
   @Test
   fun practiceBackNavigation_stepsBackwardCleanlyToToday() {
     ActivityScenario.launch(MainActivity::class.java).use {
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("today_primary_action_button").fetchSemanticsNodes().isNotEmpty()
+      }
       composeRule.waitForIdle()
 
       composeRule.onNodeWithTag("today_primary_action_button").performClick()

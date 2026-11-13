@@ -201,6 +201,15 @@ fun BallerPathApp(
                 viewModel.revealSampleCoachResponse(reflectionId)
                 selectedWorkTab = WorkFeedbackTab.COACH_RESPONDED
               },
+              onSaveCustomCoachFeedback = { reflectionId, coachResponse, nextAdjustment ->
+                viewModel.saveCustomCoachFeedback(
+                  reflectionId = reflectionId,
+                  coachResponse = coachResponse,
+                  nextAdjustment = nextAdjustment,
+                ) {
+                  selectedWorkTab = WorkFeedbackTab.COACH_RESPONDED
+                }
+              },
             )
           }
           composable(TopLevelTab.ACCOUNT.route) {

@@ -1,11 +1,17 @@
 package com.example.ui.components
 
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
@@ -18,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Forum
@@ -43,17 +50,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.BuildConfig
 import com.example.R
 import com.example.ui.theme.BurntOrange
 import com.example.ui.theme.BurntOrangeTint
@@ -280,10 +290,84 @@ fun PlayerHeaderBar(
         color = MaterialTheme.colorScheme.onBackground,
       )
     }
-    if (BuildConfig.DEBUG && demoBadgeLabel.isNotBlank()) {
+    if (demoBadgeLabel.isNotBlank()) {
       FictionalDemoBadge(
         text = demoBadgeLabel,
         modifier = Modifier.align(Alignment.CenterVertically),
+      )
+    }
+  }
+}
+
+fun openExternalUrl(context: Context, url: String) {
+  val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+    if (context !is Activity) {
+      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+  }
+  runCatching {
+    context.startActivity(intent)
+  }
+}
+
+@Composable
+fun PrivacyPolicyLinkCard(
+  linkTestTag: String,
+  urlTestTag: String,
+  modifier: Modifier = Modifier,
+) {
+  val context = LocalContext.current
+  val privacyLabel = stringResource(R.string.privacy_policy_label)
+  val privacyUrl = stringResource(R.string.privacy_policy_url)
+  val privacyCd = stringResource(R.string.cd_privacy_policy_link)
+
+  Surface(
+    onClick = { openExternalUrl(context, privacyUrl) },
+    modifier = modifier
+      .fillMaxWidth()
+      .defaultMinSize(minHeight = 48.dp)
+      .semantics(mergeDescendants = true) {
+        contentDescription = privacyCd
+        role = Role.Button
+      }
+      .testTag(linkTestTag),
+    shape = MaterialTheme.shapes.small,
+    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+  ) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 12.dp, vertical = 10.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+      Column(
+        modifier = Modifier.weight(1f),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+      ) {
+        Text(
+          text = privacyLabel,
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+          text = privacyUrl,
+          style = MaterialTheme.typography.bodySmall.copy(
+            textDecoration = TextDecoration.Underline,
+            fontWeight = FontWeight.Medium,
+          ),
+          color = NavyDeep,
+          modifier = Modifier.testTag(urlTestTag),
+        )
+      }
+      Icon(
+        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+        contentDescription = null,
+        tint = BurntOrange,
+        modifier = Modifier
+          .padding(start = 8.dp)
+          .size(18.dp),
       )
     }
   }

@@ -244,6 +244,21 @@ class LocalBallerPathRepository(
     reflectionDao.setCoachResponseRevealed(id = reflectionId, revealed = true)
   }
 
+  override suspend fun saveCustomCoachFeedback(
+    reflectionId: Long,
+    coachResponse: String,
+    nextAdjustment: String,
+  ) {
+    val cleanResponse = coachResponse.trim().ifEmpty { SampleDataSource.FIXTURE_COACH_RESPONSE }
+    val cleanNextRep = nextAdjustment.trim().ifEmpty { SampleDataSource.FIXTURE_NEXT_ADJUSTMENT }
+    reflectionDao.updateCoachFeedback(
+      id = reflectionId,
+      coachResponse = cleanResponse,
+      nextAdjustment = cleanNextRep,
+      coachLabel = SampleDataSource.fixtureCoachLabel,
+    )
+  }
+
   override suspend fun setSetupState(setupStage: SetupStage, hasGeneralWorkPublished: Boolean) {
     setupStateDao?.upsertSetupState(
       SetupStateEntity(

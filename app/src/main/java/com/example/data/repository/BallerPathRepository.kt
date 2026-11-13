@@ -55,6 +55,11 @@ interface BallerPathRepository {
   ): PracticeReflection
 
   suspend fun revealSampleCoachResponse(reflectionId: Long)
+  suspend fun saveCustomCoachFeedback(
+    reflectionId: Long,
+    coachResponse: String,
+    nextAdjustment: String,
+  )
   suspend fun setSetupState(setupStage: SetupStage, hasGeneralWorkPublished: Boolean)
   suspend fun acknowledgeParentConsent()
   suspend fun clearParentConsentForTest()

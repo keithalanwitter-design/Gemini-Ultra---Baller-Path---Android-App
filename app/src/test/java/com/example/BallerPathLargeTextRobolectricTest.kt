@@ -135,7 +135,10 @@ class BallerPathLargeTextRobolectricTest {
       composeRule.onNodeWithTag("nav_account").performClick()
       composeRule.waitForIdle()
       composeRule.onNodeWithTag("privacy_consent_card").performScrollTo().assertIsDisplayed()
-      composeRule.onNodeWithTag("account_privacy_policy_url").performScrollTo().assertIsDisplayed()
+      composeRule.onNodeWithTag("account_privacy_policy_link")
+        .performScrollTo()
+        .assertIsDisplayed()
+        .assertTextContains("https://ballerpath.com/privacy", substring = true)
       composeRule.onNodeWithTag("scenario_awaiting_coach").performScrollTo().performClick()
       composeRule.waitForIdle()
 
