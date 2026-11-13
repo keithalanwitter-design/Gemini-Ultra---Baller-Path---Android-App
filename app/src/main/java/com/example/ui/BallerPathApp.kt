@@ -11,6 +11,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -22,7 +25,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.data.model.WorkflowScenarioId
+import com.example.data.model.WorkFeedbackTab
 import com.example.ui.components.BallerPathBottomBar
 import com.example.ui.components.BallerPathNavRail
 import com.example.ui.components.TopLevelTab
@@ -44,6 +47,7 @@ fun BallerPathApp(
   val navController = rememberNavController()
   val backStackEntry by navController.currentBackStackEntryAsState()
   val currentRoute = backStackEntry?.destination?.route ?: TopLevelTab.TODAY.route
+  var selectedWorkTab by rememberSaveable { mutableStateOf(WorkFeedbackTab.TO_DO) }
 
   val lifecycleOwner = LocalLifecycleOwner.current
   DisposableEffect(lifecycleOwner, viewModel) {
@@ -76,25 +80,30 @@ fun BallerPathApp(
     }
   }
 
-  fun openPracticeFlow(forceRestart: Boolean = false) {
-    if (forceRestart) {
-      viewModel.startNewPracticeSession()
-    } else {
-      viewModel.startOrResumePracticeSession()
-    }
+  fun openPracticeFlow(assignmentId: String, forceRestart: Boolean = false) {
+    viewModel.openAssignmentPractice(
+      assignmentId = assignmentId,
+      forceRestart = forceRestart,
+    )
     navController.navigate(ROUTE_PRACTICE_FLOW) {
       launchSingleTop = true
     }
   }
 
   fun handleTodayPrimaryAction() {
-    when (uiState.currentScenario) {
-      WorkflowScenarioId.READY,
-      WorkflowScenarioId.IN_PROGRESS,
-      WorkflowScenarioId.DRAFT -> openPracticeFlow(forceRestart = false)
-      WorkflowScenarioId.MORE_WORK_READY -> openPracticeFlow(forceRestart = true)
-      WorkflowScenarioId.AWAITING_COACH,
-      WorkflowScenarioId.FEEDBACK_READY -> navigateToTab(TopLevelTab.WORK_FEEDBACK)
+    val target = uiState.todayAssignment
+    if (target != null) {
+      openPracticeFlow(assignmentId = target.assignmentId, forceRestart = false)
+    } else if (uiState.hasAnyRevealedPersonalFeedback && !uiState.hasAnyAwaitingPersonalWork) {
+      selectedWorkTab = WorkFeedbackTab.COACH_RESPONDED
+      navigateToTab(TopLevelTab.WORK_FEEDBACK)
+    } else {
+      selectedWorkTab = if (uiState.hasAnyAwaitingPersonalWork) {
+        WorkFeedbackTab.AWAITING_COACH
+      } else {
+        WorkFeedbackTab.TO_DO
+      }
+      navigateToTab(TopLevelTab.WORK_FEEDBACK)
     }
   }
 
@@ -151,17 +160,22 @@ fun BallerPathApp(
           composable(TopLevelTab.PLAN.route) {
             PlanScreen(
               uiState = uiState,
-              onOpenPractice = {
-                openPracticeFlow(forceRestart = uiState.hasSubmittedTodayReflection)
+              onOpenPractice = { assignmentId, forceRestart ->
+                openPracticeFlow(assignmentId = assignmentId, forceRestart = forceRestart)
               },
             )
           }
           composable(TopLevelTab.WORK_FEEDBACK.route) {
             WorkFeedbackScreen(
               uiState = uiState,
-              onStartOrResumePractice = { openPracticeFlow(forceRestart = false) },
+              selectedTab = selectedWorkTab,
+              onSelectTab = { selectedWorkTab = it },
+              onStartOrResumeAssignment = { assignmentId ->
+                openPracticeFlow(assignmentId = assignmentId, forceRestart = false)
+              },
               onRevealSampleFeedback = { reflectionId ->
                 viewModel.revealSampleCoachResponse(reflectionId)
+                selectedWorkTab = WorkFeedbackTab.COACH_RESPONDED
               },
             )
           }
@@ -169,6 +183,9 @@ fun BallerPathApp(
             AccountScreen(
               uiState = uiState,
               onSelectScenario = { scenario -> viewModel.applyDemoScenario(scenario) },
+              onSelectSetupState = { stage, hasGeneral ->
+                viewModel.setSetupState(stage, hasGeneral)
+              },
               onResetDemoData = { viewModel.resetDemoData() },
             )
           }
@@ -188,6 +205,7 @@ fun BallerPathApp(
               onStarterCueClicked = { viewModel.applyStarterCue(it) },
               onSubmitReflection = {
                 viewModel.submitReflection {
+                  selectedWorkTab = WorkFeedbackTab.AWAITING_COACH
                   navController.navigate(TopLevelTab.WORK_FEEDBACK.route) {
                     popUpTo(TopLevelTab.TODAY.route) {
                       saveState = false

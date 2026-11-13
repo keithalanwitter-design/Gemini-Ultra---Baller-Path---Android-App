@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
 import com.example.R
+import com.example.data.model.SetupStage
 import com.example.data.model.WorkflowScenarioId
 import com.example.ui.components.CoachKeithAvatar
 import com.example.ui.components.FictionalDemoBadge
@@ -69,45 +70,7 @@ fun TodayScreen(
   modifier: Modifier = Modifier,
 ) {
   val scrollState = rememberScrollState()
-  val focus = uiState.todayFocus
-  val scenario = uiState.currentScenario
-
-  val stateChipLabel = when (scenario) {
-    WorkflowScenarioId.READY -> "Practice ready"
-    WorkflowScenarioId.IN_PROGRESS -> "Practice in progress · ${uiState.activeStepTitle}"
-    WorkflowScenarioId.DRAFT -> "Reflection draft saved"
-    WorkflowScenarioId.AWAITING_COACH -> "Awaiting coach"
-    WorkflowScenarioId.FEEDBACK_READY ->
-      if (BuildConfig.DEBUG) "Sample feedback ready" else "Coach responded"
-    WorkflowScenarioId.MORE_WORK_READY -> "More work ready"
-  }
-
-  val statusDetailMessage = when (scenario) {
-    WorkflowScenarioId.READY -> null
-    WorkflowScenarioId.IN_PROGRESS ->
-      "Left off on ${uiState.activeStepTitle}. Pick up right where you paused."
-    WorkflowScenarioId.DRAFT ->
-      "Unfinished reflection saved on this phone. Finish and submit when ready."
-    WorkflowScenarioId.AWAITING_COACH ->
-      "Reflection saved locally. Coach review pending (${uiState.developmentPlan.reviewLabel})."
-    WorkflowScenarioId.FEEDBACK_READY ->
-      if (BuildConfig.DEBUG) {
-        "Coach Keith's sample response and next adjustment are ready below."
-      } else {
-        "Coach Keith's response and next adjustment are ready in Work + Feedback."
-      }
-    WorkflowScenarioId.MORE_WORK_READY ->
-      "Previous work saved. Next drill is ready whenever you are."
-  }
-
-  val ctaIcon = when (scenario) {
-    WorkflowScenarioId.READY,
-    WorkflowScenarioId.IN_PROGRESS,
-    WorkflowScenarioId.MORE_WORK_READY -> Icons.Filled.PlayArrow
-    WorkflowScenarioId.DRAFT -> Icons.Filled.EditNote
-    WorkflowScenarioId.AWAITING_COACH -> Icons.Filled.HourglassTop
-    WorkflowScenarioId.FEEDBACK_READY -> Icons.Filled.Forum
-  }
+  val setupStage = uiState.setupState.setupStage
 
   Box(
     modifier = modifier
@@ -129,136 +92,30 @@ fun TodayScreen(
         demoBadgeLabel = uiState.player.demoBadgeLabel,
       )
 
-      // Hero Focus Card: answers "What should I work on today?" with ONE primary action for where Maya left off
-      Surface(
-        modifier = Modifier
-          .fillMaxWidth()
-          .testTag("today_focus_card"),
-        shape = MaterialTheme.shapes.large,
-        shadowElevation = 4.dp,
-      ) {
-        Box(
-          modifier = Modifier
-            .background(
-              Brush.linearGradient(
-                colors = listOf(NavyDeep, NavyPrimary, NavyElevated)
-              )
-            )
-            .padding(14.dp),
-        ) {
-          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            FlowRow(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-              Text(
-                text = focus.headlineQuestion.uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = BurntOrangeTint,
-                modifier = Modifier.align(Alignment.CenterVertically),
-              )
-              FictionalDemoBadge(
-                text = stateChipLabel,
-                onDarkBackground = true,
-                modifier = Modifier.testTag("today_state_badge"),
-              )
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-              Text(
-                text = focus.title,
-                style = MaterialTheme.typography.headlineMedium,
-                color = Color.White,
-              )
-              Text(
-                text = focus.focusHeadline,
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.92f),
-              )
-            }
-
-            if (statusDetailMessage != null) {
-              Surface(
-                shape = MaterialTheme.shapes.small,
-                color = BurntOrange.copy(alpha = 0.28f),
-                border = BorderStroke(1.dp, BurntOrange),
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .testTag("today_status_message"),
-              ) {
-                Text(
-                  text = statusDetailMessage,
-                  style = MaterialTheme.typography.bodySmall,
-                  color = Color.White,
-                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                )
-              }
-            }
-
-            // Coach Keith cue
-            Surface(
-              shape = MaterialTheme.shapes.medium,
-              color = Color.White.copy(alpha = 0.10f),
-              border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
-            ) {
-              Row(
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-              ) {
-                CoachKeithAvatar(sizeDp = 36)
-                Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                  Text(
-                    text = "${uiState.player.coachName} · ${focus.totalMinutes} min",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = BurntOrangeTint,
-                  )
-                  Spacer(modifier = Modifier.height(2.dp))
-                  Text(
-                    text = focus.coachCue,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White,
-                  )
-                }
-              }
-            }
-
-            // ONE Main Action driven by where the player left off
-            Button(
-              onClick = onPrimaryAction,
-              modifier = Modifier
-                .fillMaxWidth()
-                .defaultMinSize(minHeight = 50.dp)
-                .testTag("today_primary_action_button"),
-              shape = RoundedCornerShape(14.dp),
-              colors = ButtonDefaults.buttonColors(
-                containerColor = BurntOrange,
-                contentColor = Color.White,
-              ),
-              contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-            ) {
-              Icon(
-                imageVector = ctaIcon,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-              )
-              Spacer(modifier = Modifier.width(8.dp))
-              Text(
-                text = scenario.primaryActionLabel,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-              )
-              Spacer(modifier = Modifier.width(6.dp))
-              Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-              )
-            }
-          }
+      when {
+        setupStage == SetupStage.SETUP_IN_PROGRESS -> {
+          SetupWaitingCard(
+            badgeText = "Setup in progress",
+            headline = "Getting ${uiState.player.firstName}'s plan ready",
+            message = "Coach Keith is reviewing ${uiState.player.firstName}'s info. You'll get access within 2 business days.",
+            coachNote = "Once your family profile is reviewed, Coach Keith will publish ${uiState.player.firstName}'s first focus right here.",
+            testTag = "today_setup_in_progress_card",
+          )
+        }
+        setupStage == SetupStage.PLAN_BEING_PREPARED && uiState.todayAssignment == null -> {
+          SetupWaitingCard(
+            badgeText = "Plan being prepared",
+            headline = "${uiState.player.firstName} is active",
+            message = "Coach Keith is putting together ${uiState.player.firstName}'s personal focus. Any general warm-up work will appear here once published.",
+            coachNote = "Check back soon for ${uiState.player.firstName}'s first assigned drill.",
+            testTag = "today_plan_being_prepared_card",
+          )
+        }
+        else -> {
+          TodayActiveHeroContent(
+            uiState = uiState,
+            onPrimaryAction = onPrimaryAction,
+          )
         }
       }
 
@@ -268,86 +125,364 @@ fun TodayScreen(
         modifier = Modifier.testTag("today_headline_visual"),
       )
 
-      // Compact 8-minute breakdown below the fold
-      Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
-      ) {
-        Column(
-          modifier = Modifier.padding(16.dp),
-          verticalArrangement = Arrangement.spacedBy(12.dp),
+      val flowAssignment = uiState.todayAssignment
+      if (flowAssignment != null) {
+        Card(
+          modifier = Modifier.fillMaxWidth(),
+          shape = MaterialTheme.shapes.medium,
+          colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+          border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
         ) {
-          FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+          Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
           ) {
-            Text(
-              text = "Inside Today's 8-Minute Flow",
-              style = MaterialTheme.typography.titleMedium,
-              color = MaterialTheme.colorScheme.onSurface,
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              Icon(
-                imageVector = Icons.Outlined.Schedule,
-                contentDescription = null,
-                tint = BurntOrange,
-                modifier = Modifier.size(16.dp),
-              )
-              Spacer(modifier = Modifier.width(4.dp))
-              Text(
-                text = "3 steps + reflection",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-            }
-          }
-
-          focus.steps.forEach { step ->
-            Row(
+            FlowRow(
               modifier = Modifier.fillMaxWidth(),
-              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-              Box(
-                modifier = Modifier
-                  .size(30.dp)
-                  .clip(CircleShape)
-                  .background(MaterialTheme.colorScheme.secondaryContainer),
-                contentAlignment = Alignment.Center,
-              ) {
+              Text(
+                text = "Inside Today's ${flowAssignment.totalMinutes}-Minute Flow",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+              )
+              Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                  imageVector = Icons.Outlined.Schedule,
+                  contentDescription = null,
+                  tint = BurntOrange,
+                  modifier = Modifier.size(16.dp),
+                )
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                  text = "${step.stepNumber}",
+                  text = "${flowAssignment.steps.size} steps + reflection",
                   style = MaterialTheme.typography.labelMedium,
-                  color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-              }
-              Spacer(modifier = Modifier.width(12.dp))
-              Column(modifier = Modifier.weight(1f)) {
-                Text(
-                  text = step.title,
-                  style = MaterialTheme.typography.titleSmall,
-                  color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                  text = step.instruction,
-                  style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
               }
-              Spacer(modifier = Modifier.width(8.dp))
-              Text(
-                text = "${step.durationMinutes}m",
-                style = MaterialTheme.typography.labelLarge,
-                color = BurntOrange,
-              )
+            }
+
+            flowAssignment.steps.forEach { step ->
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                Box(
+                  modifier = Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                  contentAlignment = Alignment.Center,
+                ) {
+                  Text(
+                    text = "${step.stepNumber}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                  )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = step.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                  )
+                  Text(
+                    text = step.instruction,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                  text = "${step.durationMinutes}m",
+                  style = MaterialTheme.typography.labelLarge,
+                  color = BurntOrange,
+                )
+              }
             }
           }
         }
       }
 
       Spacer(modifier = Modifier.height(6.dp))
+    }
+  }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TodayActiveHeroContent(
+  uiState: BallerPathUiState,
+  onPrimaryAction: () -> Unit,
+) {
+  val targetAssignment = uiState.todayAssignment
+  val scenario = uiState.currentScenario
+  val actionLabel = uiState.todayPrimaryActionLabel ?: "Start"
+
+  val stateChipLabel = when {
+    uiState.setupState.setupStage == SetupStage.PLAN_BEING_PREPARED && targetAssignment != null -> {
+      if (targetAssignment.hasDraftOrSession) "General work in progress" else "General work ready"
+    }
+    scenario == WorkflowScenarioId.DRAFT -> "Reflection draft saved"
+    scenario == WorkflowScenarioId.IN_PROGRESS -> "Practice in progress · ${uiState.todayStepTitle}"
+    scenario == WorkflowScenarioId.MORE_WORK_READY ->
+      if (BuildConfig.DEBUG) "More work ready" else "Practice ready"
+    scenario == WorkflowScenarioId.AWAITING_COACH -> "Awaiting coach"
+    scenario == WorkflowScenarioId.FEEDBACK_READY ->
+      if (BuildConfig.DEBUG) "Sample feedback ready" else "Coach responded"
+    else -> "Practice ready"
+  }
+
+  val statusDetailMessage = when {
+    uiState.setupState.setupStage == SetupStage.PLAN_BEING_PREPARED && targetAssignment != null ->
+      "Coach Keith is preparing ${uiState.player.firstName}'s personal focus. You can start this general work now."
+    scenario == WorkflowScenarioId.DRAFT ->
+      "Unfinished reflection saved on this phone for ${targetAssignment?.title ?: "this drill"}. Finish and submit when ready."
+    scenario == WorkflowScenarioId.IN_PROGRESS ->
+      "Left off on ${uiState.todayStepTitle}. Pick up right where you paused."
+    targetAssignment != null && uiState.hasAnySubmittedPersonalWork ->
+      "Saved. Coach Keith will review it. Next ready drill: ${targetAssignment.title}."
+    uiState.isAllPersonalWorkSubmitted && uiState.hasAnyAwaitingPersonalWork ->
+      "Saved. Coach Keith will review it. (${uiState.developmentPlan.reviewLabel})"
+    uiState.isAllPersonalWorkSubmitted && uiState.hasAnyRevealedPersonalFeedback ->
+      "Saved. Coach Keith has reviewed your reflections in Work + Feedback."
+    else -> null
+  }
+
+  val ctaIcon = when {
+    scenario == WorkflowScenarioId.DRAFT -> Icons.Filled.EditNote
+    targetAssignment != null -> Icons.Filled.PlayArrow
+    uiState.hasAnyAwaitingPersonalWork -> Icons.Filled.HourglassTop
+    else -> Icons.Filled.Forum
+  }
+
+  val heroTitle = targetAssignment?.title ?: "All assigned drills submitted"
+  val heroSubtitle = targetAssignment?.focusHeadline
+    ?: "Check Work + Feedback for your reflections and coach notes."
+  val heroCoachNote = targetAssignment?.coachCue
+    ?: "Check Work + Feedback anytime to review what you noticed and Coach Keith's responses."
+  val minutesLabel = targetAssignment?.let { "${it.totalMinutes} min" } ?: "Review"
+
+  Surface(
+    modifier = Modifier
+      .fillMaxWidth()
+      .testTag("today_focus_card"),
+    shape = MaterialTheme.shapes.large,
+    shadowElevation = 4.dp,
+  ) {
+    Box(
+      modifier = Modifier
+        .background(
+          Brush.linearGradient(
+            colors = listOf(NavyDeep, NavyPrimary, NavyElevated)
+          )
+        )
+        .padding(14.dp),
+    ) {
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+          Text(
+            text = (targetAssignment?.headlineQuestion ?: "TODAY'S STATUS").uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = BurntOrangeTint,
+            modifier = Modifier.align(Alignment.CenterVertically),
+          )
+          FictionalDemoBadge(
+            text = stateChipLabel,
+            onDarkBackground = true,
+            modifier = Modifier.testTag("today_state_badge"),
+          )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+          Text(
+            text = heroTitle,
+            style = MaterialTheme.typography.headlineMedium,
+            color = Color.White,
+          )
+          Text(
+            text = heroSubtitle,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White.copy(alpha = 0.92f),
+          )
+        }
+
+        if (statusDetailMessage != null) {
+          Surface(
+            shape = MaterialTheme.shapes.small,
+            color = BurntOrange.copy(alpha = 0.28f),
+            border = BorderStroke(1.dp, BurntOrange),
+            modifier = Modifier
+              .fillMaxWidth()
+              .testTag("today_status_message"),
+          ) {
+            Text(
+              text = statusDetailMessage,
+              style = MaterialTheme.typography.bodySmall,
+              color = Color.White,
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+          }
+        }
+
+        Surface(
+          shape = MaterialTheme.shapes.medium,
+          color = Color.White.copy(alpha = 0.10f),
+          border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+        ) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            CoachKeithAvatar(sizeDp = 36)
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = "${uiState.player.coachName} · $minutesLabel",
+                style = MaterialTheme.typography.labelSmall,
+                color = BurntOrangeTint,
+              )
+              Spacer(modifier = Modifier.height(2.dp))
+              Text(
+                text = heroCoachNote,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White,
+              )
+            }
+          }
+        }
+
+        Button(
+          onClick = onPrimaryAction,
+          modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 50.dp)
+            .testTag("today_primary_action_button"),
+          shape = RoundedCornerShape(14.dp),
+          colors = ButtonDefaults.buttonColors(
+            containerColor = BurntOrange,
+            contentColor = Color.White,
+          ),
+          contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+        ) {
+          Icon(
+            imageVector = ctaIcon,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+          )
+          Spacer(modifier = Modifier.width(8.dp))
+          Text(
+            text = actionLabel,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+          )
+          Spacer(modifier = Modifier.width(6.dp))
+          Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+          )
+        }
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SetupWaitingCard(
+  badgeText: String,
+  headline: String,
+  message: String,
+  coachNote: String,
+  testTag: String,
+) {
+  Surface(
+    modifier = Modifier
+      .fillMaxWidth()
+      .testTag(testTag),
+    shape = MaterialTheme.shapes.large,
+    shadowElevation = 4.dp,
+  ) {
+    Box(
+      modifier = Modifier
+        .background(
+          Brush.linearGradient(
+            colors = listOf(NavyDeep, NavyPrimary, NavyElevated)
+          )
+        )
+        .padding(16.dp),
+    ) {
+      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        FlowRow(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+          Text(
+            text = "BALLER PATH ONBOARDING",
+            style = MaterialTheme.typography.labelSmall,
+            color = BurntOrangeTint,
+            modifier = Modifier.align(Alignment.CenterVertically),
+          )
+          FictionalDemoBadge(
+            text = badgeText,
+            onDarkBackground = true,
+            modifier = Modifier.testTag("today_state_badge"),
+          )
+        }
+
+        Text(
+          text = headline,
+          style = MaterialTheme.typography.headlineMedium,
+          color = Color.White,
+        )
+
+        Surface(
+          shape = MaterialTheme.shapes.small,
+          color = BurntOrange.copy(alpha = 0.28f),
+          border = BorderStroke(1.dp, BurntOrange),
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("today_status_message"),
+        ) {
+          Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White,
+            modifier = Modifier.padding(12.dp),
+          )
+        }
+
+        Surface(
+          shape = MaterialTheme.shapes.medium,
+          color = Color.White.copy(alpha = 0.10f),
+          border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+        ) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            CoachKeithAvatar(sizeDp = 36)
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+              text = coachNote,
+              style = MaterialTheme.typography.bodySmall,
+              color = Color.White,
+            )
+          }
+        }
+      }
     }
   }
 }

@@ -20,6 +20,8 @@ class MainActivity : ComponentActivity() {
     val repository = LocalBallerPathRepository(
       reflectionDao = database.reflectionDao(),
       practiceDraftDao = database.practiceDraftDao(),
+      assignmentDao = database.assignmentDao(),
+      setupStateDao = database.setupStateDao(),
     )
 
     setContent {

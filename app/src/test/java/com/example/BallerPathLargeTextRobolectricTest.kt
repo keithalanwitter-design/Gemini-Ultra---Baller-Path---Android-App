@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -37,11 +39,15 @@ class BallerPathLargeTextRobolectricTest {
     LocalBallerPathRepository(
       reflectionDao = db.reflectionDao(),
       practiceDraftDao = db.practiceDraftDao(),
+      assignmentDao = db.assignmentDao(),
+      setupStateDao = db.setupStateDao(),
     ).resetDemoData()
   }
 
   @Test
   fun largeSystemText_smallPhone_keyActionsRemainReachableAndReadable() {
+    val assign1Id = SampleDataSource.ASSIGNMENT_PASS_LOOK_DECIDE
+
     ActivityScenario.launch(MainActivity::class.java).use {
       composeRule.waitForIdle()
 
@@ -50,7 +56,7 @@ class BallerPathLargeTextRobolectricTest {
         .performScrollTo()
         .assertIsDisplayed()
         .assertHeightIsAtLeast(48.dp)
-        .assertTextContains("Start practice", substring = true)
+        .assertTextEquals("Start")
         .performClick()
       composeRule.waitForIdle()
 
@@ -75,26 +81,28 @@ class BallerPathLargeTextRobolectricTest {
       composeRule.onNodeWithTag("practice_back_button").performClick()
       composeRule.waitForIdle()
 
-      // Switch to Awaiting Coach via Account and verify reveal button + Next Adjustment remain reachable
+      // Switch to Awaiting Coach via Account and verify reveal button + Try the next rep remain reachable
       composeRule.onNodeWithTag("nav_account").performClick()
       composeRule.waitForIdle()
       composeRule.onNodeWithTag("scenario_awaiting_coach").performScrollTo().performClick()
       composeRule.waitForIdle()
 
       composeRule.onNodeWithTag("nav_work_feedback").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("wf_tab_awaiting").performClick()
       composeRule.waitUntil(timeoutMillis = 5_000) {
         composeRule.onAllNodesWithText(SampleDataSource.FIXTURE_SUBMITTED_TEXT).fetchSemanticsNodes().isNotEmpty()
       }
-      composeRule.onNodeWithTag("reveal_sample_feedback_button")
+      composeRule.onNodeWithTag("reveal_feedback_$assign1Id")
         .performScrollTo()
         .assertIsDisplayed()
         .assertHeightIsAtLeast(48.dp)
         .performClick()
 
       composeRule.waitUntil(timeoutMillis = 5_000) {
-        composeRule.onAllNodesWithText(SampleDataSource.FIXTURE_COACH_RESPONSE).fetchSemanticsNodes().isNotEmpty()
+        composeRule.onAllNodesWithTag("next_rep_${assign1Id}_0").fetchSemanticsNodes().isNotEmpty()
       }
-      composeRule.onNodeWithTag("next_adjustment_box").performScrollTo().assertIsDisplayed()
+      composeRule.onNodeWithTag("next_rep_${assign1Id}_0").performScrollTo().assertIsDisplayed()
     }
   }
 }

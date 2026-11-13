@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.FamilyRestroom
+import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.RestartAlt
@@ -48,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
 import com.example.R
+import com.example.data.model.SetupStage
 import com.example.data.model.WorkflowScenarioId
 import com.example.ui.components.CoachKeithAvatar
 import com.example.ui.components.FictionalDemoBadge
@@ -59,6 +61,7 @@ import com.example.ui.viewmodel.BallerPathUiState
 fun AccountScreen(
   uiState: BallerPathUiState,
   onSelectScenario: (WorkflowScenarioId) -> Unit,
+  onSelectSetupState: (SetupStage, Boolean) -> Unit,
   onResetDemoData: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
@@ -115,7 +118,7 @@ fun AccountScreen(
         }
       }
 
-      // Simulated Family Profile Card
+      // Family Profile Card
       Surface(
         modifier = Modifier
           .fillMaxWidth()
@@ -218,111 +221,138 @@ fun AccountScreen(
       }
 
       if (BuildConfig.DEBUG) {
-        // Fictional Demo Scenario Switcher
+        // Fictional Demo Scenario Switcher (includes "More work ready" in DEBUG only)
         Card(
           modifier = Modifier
             .fillMaxWidth()
             .testTag("scenario_switcher_card"),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
-      ) {
-        Column(
-          modifier = Modifier.padding(16.dp),
-          verticalArrangement = Arrangement.spacedBy(10.dp),
+          shape = MaterialTheme.shapes.medium,
+          colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+          border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
         ) {
-          Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-              imageVector = Icons.Outlined.Science,
-              contentDescription = null,
-              tint = BurntOrange,
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Column {
-              Text(
-                text = "Demo Scenario Switcher",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+          Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(
+                imageVector = Icons.Outlined.Science,
+                contentDescription = null,
+                tint = BurntOrange,
               )
-              Text(
-                text = "Jump to any fictional state on Today and Work + Feedback.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-            }
-          }
-
-          WorkflowScenarioId.entries.forEach { scenario ->
-            val selected = scenario == activeScenario
-            Surface(
-              onClick = { onSelectScenario(scenario) },
-              modifier = Modifier
-                .fillMaxWidth()
-                .defaultMinSize(minHeight = 48.dp)
-                .testTag("scenario_${scenario.id}"),
-              shape = RoundedCornerShape(12.dp),
-              color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-              border = BorderStroke(
-                width = if (selected) 1.5.dp else 1.dp,
-                color = if (selected) BurntOrange else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-              ),
-            ) {
-              Row(
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-              ) {
-                Row(
-                  modifier = Modifier.weight(1f),
-                  verticalAlignment = Alignment.CenterVertically,
-                ) {
-                  Icon(
-                    imageVector = if (selected) Icons.Filled.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
-                    contentDescription = null,
-                    tint = if (selected) BurntOrange else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                  )
-                  Spacer(modifier = Modifier.width(10.dp))
-                  Column {
-                    Text(
-                      text = scenario.label,
-                      style = MaterialTheme.typography.titleSmall,
-                      fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                      color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                      text = "Today action: ${scenario.primaryActionLabel}",
-                      style = MaterialTheme.typography.bodySmall,
-                      color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                  }
-                }
+              Spacer(modifier = Modifier.width(8.dp))
+              Column {
+                Text(
+                  text = "Demo Scenario Switcher",
+                  style = MaterialTheme.typography.titleMedium,
+                  color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                  text = "Jump to any fictional state on Today and Work + Feedback.",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
               }
             }
+
+            WorkflowScenarioId.entries.forEach { scenario ->
+              val selected = uiState.setupState.setupStage == SetupStage.WORK_READY && scenario == activeScenario
+              DemoChoiceRow(
+                title = scenario.label,
+                subtitle = "Today action: ${scenario.primaryActionLabel}",
+                selected = selected,
+                testTag = "scenario_${scenario.id}",
+                onClick = { onSelectScenario(scenario) },
+              )
+            }
           }
         }
-      }
 
-      if (uiState.demoStatusMessage != null) {
-        Surface(
-          shape = MaterialTheme.shapes.small,
-          color = MaterialTheme.colorScheme.tertiaryContainer,
+        // B2 Onboarding / Setup State Preview Switcher (DEBUG only)
+        Card(
           modifier = Modifier
             .fillMaxWidth()
-            .testTag("account_demo_status_message"),
+            .testTag("setup_state_switcher_card"),
+          shape = MaterialTheme.shapes.medium,
+          colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+          border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
         ) {
-          Text(
-            text = uiState.demoStatusMessage,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onTertiaryContainer,
-            modifier = Modifier.padding(12.dp),
-          )
-        }
-      }
+          Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(
+                imageVector = Icons.Outlined.HourglassEmpty,
+                contentDescription = null,
+                tint = BurntOrange,
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Column {
+                Text(
+                  text = "Setup State Preview",
+                  style = MaterialTheme.typography.titleMedium,
+                  color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                  text = "Preview how Today and Plan behave before personal focus work is published.",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+              }
+            }
 
-        // Reset Demo Data Action
+            val stage = uiState.setupState.setupStage
+            val hasGeneral = uiState.setupState.hasGeneralWorkPublished
+
+            DemoChoiceRow(
+              title = "Setup in progress",
+              subtitle = "Family waiting for activation (within 2 business days)",
+              selected = stage == SetupStage.SETUP_IN_PROGRESS,
+              testTag = "setup_stage_in_progress",
+              onClick = { onSelectSetupState(SetupStage.SETUP_IN_PROGRESS, false) },
+            )
+            DemoChoiceRow(
+              title = "Plan being prepared (general work ready)",
+              subtitle = "Active player, no personal focus yet; general drill published",
+              selected = stage == SetupStage.PLAN_BEING_PREPARED && hasGeneral,
+              testTag = "setup_stage_preparing_with_general",
+              onClick = { onSelectSetupState(SetupStage.PLAN_BEING_PREPARED, true) },
+            )
+            DemoChoiceRow(
+              title = "Plan being prepared (no general work)",
+              subtitle = "Active player, waiting on Coach Keith to publish work",
+              selected = stage == SetupStage.PLAN_BEING_PREPARED && !hasGeneral,
+              testTag = "setup_stage_preparing_no_general",
+              onClick = { onSelectSetupState(SetupStage.PLAN_BEING_PREPARED, false) },
+            )
+            DemoChoiceRow(
+              title = "Work ready",
+              subtitle = "Personal weekly assignments active",
+              selected = stage == SetupStage.WORK_READY,
+              testTag = "setup_stage_work_ready",
+              onClick = { onSelectSetupState(SetupStage.WORK_READY, true) },
+            )
+          }
+        }
+
+        if (uiState.demoStatusMessage != null) {
+          Surface(
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.tertiaryContainer,
+            modifier = Modifier
+              .fillMaxWidth()
+              .testTag("account_demo_status_message"),
+          ) {
+            Text(
+              text = uiState.demoStatusMessage,
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onTertiaryContainer,
+              modifier = Modifier.padding(12.dp),
+            )
+          }
+        }
+
         OutlinedButton(
           onClick = onResetDemoData,
           modifier = Modifier
@@ -381,7 +411,6 @@ fun AccountScreen(
       }
 
       if (BuildConfig.DEBUG) {
-        // Prototype Scope & Service Boundary Card
         Card(
           modifier = Modifier.fillMaxWidth(),
           shape = MaterialTheme.shapes.medium,
@@ -419,7 +448,7 @@ fun AccountScreen(
               )
               Spacer(modifier = Modifier.width(8.dp))
               Text(
-                text = "Local Room storage keeps Maya's active step, unfinished draft, and submitted reflections across app restarts. BallerPathRepository and BallerPathServiceGateway mark where the live Baller Path backend plugs in.",
+                text = "Local Room storage keeps Maya's active step, unfinished drafts, and submitted reflections across app restarts.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
@@ -429,6 +458,63 @@ fun AccountScreen(
       }
 
       Spacer(modifier = Modifier.height(8.dp))
+    }
+  }
+}
+
+@Composable
+private fun DemoChoiceRow(
+  title: String,
+  subtitle: String,
+  selected: Boolean,
+  testTag: String,
+  onClick: () -> Unit,
+) {
+  Surface(
+    onClick = onClick,
+    modifier = Modifier
+      .fillMaxWidth()
+      .defaultMinSize(minHeight = 48.dp)
+      .testTag(testTag),
+    shape = RoundedCornerShape(12.dp),
+    color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+    border = BorderStroke(
+      width = if (selected) 1.5.dp else 1.dp,
+      color = if (selected) BurntOrange else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+    ),
+  ) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 12.dp, vertical = 10.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+      Row(
+        modifier = Modifier.weight(1f),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Icon(
+          imageVector = if (selected) Icons.Filled.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+          contentDescription = null,
+          tint = if (selected) BurntOrange else MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.size(20.dp),
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Column {
+          Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+          )
+          Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+      }
     }
   }
 }

@@ -53,6 +53,8 @@ class BallerPathFlowRobolectricTest {
     LocalBallerPathRepository(
       reflectionDao = db.reflectionDao(),
       practiceDraftDao = db.practiceDraftDao(),
+      assignmentDao = db.assignmentDao(),
+      setupStateDao = db.setupStateDao(),
     ).resetDemoData()
   }
 
@@ -69,7 +71,7 @@ class BallerPathFlowRobolectricTest {
       composeRule.onNodeWithTag("today_primary_action_button")
         .assertIsDisplayed()
         .assertHeightIsAtLeast(48.dp)
-        .assertTextContains("Start practice", substring = true)
+        .assertTextEquals("Start")
 
       composeRule.onNodeWithTag("nav_today").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
       composeRule.onNodeWithTag("nav_plan").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
@@ -82,6 +84,7 @@ class BallerPathFlowRobolectricTest {
   fun fullFlow_timerPauseBackground_draftRecoveryAfterRestart_awaitingCoachAndReveal() {
     val draftText = "My teammate started to drive, so I stayed wide"
     val fullSubmitted = "$draftText to give them room."
+    val assign1Id = SampleDataSource.ASSIGNMENT_PASS_LOOK_DECIDE
 
     ActivityScenario.launch(MainActivity::class.java).use { scenario ->
       composeRule.waitForIdle()
@@ -126,7 +129,7 @@ class BallerPathFlowRobolectricTest {
       composeRule.waitForIdle()
 
       // 2. Type unfinished reflection draft, background to flush Room write, then close activity
-      composeRule.onNodeWithText(SampleDataSource.todayFocus.reflectionPrompt).assertIsDisplayed()
+      composeRule.onNodeWithText(SampleDataSource.assignmentOne.reflectionPrompt).assertIsDisplayed()
       composeRule.onNodeWithTag("reflection_input").performScrollTo().performTextInput(draftText)
       composeRule.waitForIdle()
       composeRule.onNodeWithTag("draft_saved_indicator").performScrollTo().assertIsDisplayed()
@@ -140,14 +143,14 @@ class BallerPathFlowRobolectricTest {
       ShadowLooper.idleMainLooper(200, TimeUnit.MILLISECONDS)
     }
 
-    // 3. Cold app restart -> lands on Today with "Finish reflection" -> opens Practice & recovers draft
+    // 3. Cold app restart -> lands on Today with "Resume" -> opens Practice & recovers draft
     ActivityScenario.launch(MainActivity::class.java).use {
       composeRule.waitUntil(timeoutMillis = 5_000) {
-        composeRule.onAllNodesWithText("Finish reflection").fetchSemanticsNodes().isNotEmpty()
+        composeRule.onAllNodesWithText("Resume").fetchSemanticsNodes().isNotEmpty()
       }
       composeRule.onNodeWithTag("today_primary_action_button")
         .assertIsDisplayed()
-        .assertTextContains("Finish reflection", substring = true)
+        .assertTextEquals("Resume")
         .performClick()
       composeRule.waitForIdle()
 
@@ -159,53 +162,54 @@ class BallerPathFlowRobolectricTest {
       composeRule.onNodeWithTag("submit_reflection_button").performClick()
 
       composeRule.waitUntil(timeoutMillis = 5_000) {
-        composeRule.onAllNodesWithTag("awaiting_coach_card").fetchSemanticsNodes().isNotEmpty()
+        composeRule.onAllNodesWithTag("awaiting_coach_card_$assign1Id").fetchSemanticsNodes().isNotEmpty()
       }
       composeRule.waitForIdle()
 
-      // 4. Work + Feedback shows Awaiting Coach (NOT auto-revealed) + Demo reveal control
+      // 4. Work + Feedback Awaiting coach shows Assignment 1 + Demo reveal control
       composeRule.onNodeWithText(fullSubmitted).performScrollTo().assertIsDisplayed()
-      composeRule.onNodeWithTag("awaiting_coach_card").performScrollTo().assertIsDisplayed()
-      composeRule.onNodeWithText("AWAITING COACH").performScrollTo().assertIsDisplayed()
-      composeRule.onNodeWithTag("reveal_sample_feedback_button")
+      composeRule.onNodeWithTag("awaiting_coach_card_$assign1Id").performScrollTo().assertIsDisplayed()
+      composeRule.onNodeWithTag("reveal_feedback_$assign1Id")
         .performScrollTo()
         .assertIsDisplayed()
         .assertHeightIsAtLeast(48.dp)
 
-      // Verify Today shows "Open work" while Awaiting Coach
+      // 5. Verify Today offers next ready assignment (Assignment 2) while Assignment 1 awaits review
       composeRule.onNodeWithTag("nav_today").performClick()
       composeRule.waitUntil(timeoutMillis = 5_000) {
-        composeRule.onAllNodesWithText("Open work").fetchSemanticsNodes().isNotEmpty()
+        composeRule.onAllNodesWithText("Corner Relocation Read").fetchSemanticsNodes().isNotEmpty()
       }
       composeRule.onNodeWithTag("today_primary_action_button")
-        .performScrollTo()
         .assertIsDisplayed()
-        .assertTextContains("Open work", substring = true)
-        .performClick()
-      composeRule.waitForIdle()
+        .assertTextEquals("Start")
 
-      // 5. Tap clearly labeled Demo reveal button -> reveals Sample Coach Response + Next Adjustment
-      composeRule.onNodeWithTag("reveal_sample_feedback_button").performScrollTo().performClick()
+      // 6. Go to Work + Feedback -> Awaiting coach -> Reveal feedback for Assignment 1
+      composeRule.onNodeWithTag("nav_work_feedback").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("wf_tab_awaiting").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("reveal_feedback_$assign1Id").performScrollTo().performClick()
+
       composeRule.waitUntil(timeoutMillis = 5_000) {
-        composeRule.onAllNodesWithText("SAMPLE COACH RESPONSE · COACH KEITH").fetchSemanticsNodes().isNotEmpty()
+        composeRule.onAllNodesWithTag("next_rep_${assign1Id}_0").fetchSemanticsNodes().isNotEmpty()
       }
-      composeRule.onNodeWithText("SAMPLE COACH RESPONSE · COACH KEITH").performScrollTo().assertIsDisplayed()
-      composeRule.onNodeWithTag("next_adjustment_box").performScrollTo().assertIsDisplayed()
+      composeRule.onNodeWithTag("coach_response_${assign1Id}_0").performScrollTo().assertIsDisplayed()
+      composeRule.onNodeWithTag("next_rep_${assign1Id}_0").performScrollTo().assertIsDisplayed()
+      composeRule.onNodeWithText("TRY THE NEXT REP").performScrollTo().assertIsDisplayed()
     }
 
-    // 6. Cold restart again -> Today shows "Read feedback" and feedback remains revealed
+    // 7. Cold restart -> Today offers next ready Assignment 2, and Coach responded preserves Assignment 1 feedback
     ActivityScenario.launch(MainActivity::class.java).use {
       composeRule.waitUntil(timeoutMillis = 5_000) {
-        composeRule.onAllNodesWithText("Read feedback").fetchSemanticsNodes().isNotEmpty()
+        composeRule.onAllNodesWithText("Corner Relocation Read").fetchSemanticsNodes().isNotEmpty()
       }
-      composeRule.onNodeWithTag("today_primary_action_button")
-        .performScrollTo()
-        .assertIsDisplayed()
-        .assertTextContains("Read feedback", substring = true)
-        .performClick()
+      composeRule.onNodeWithTag("nav_work_feedback").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("wf_tab_responded").performClick()
       composeRule.waitForIdle()
       composeRule.onNodeWithText(fullSubmitted).performScrollTo().assertIsDisplayed()
-      composeRule.onNodeWithText("SAMPLE COACH RESPONSE · COACH KEITH").performScrollTo().assertIsDisplayed()
+      composeRule.onNodeWithTag("coach_response_${assign1Id}_0").performScrollTo().assertIsDisplayed()
+      composeRule.onNodeWithTag("next_rep_${assign1Id}_0").performScrollTo().assertIsDisplayed()
     }
   }
 
@@ -229,11 +233,11 @@ class BallerPathFlowRobolectricTest {
 
       composeRule.onNodeWithTag("nav_today").performClick()
       composeRule.waitUntil(timeoutMillis = 5_000) {
-        composeRule.onAllNodesWithText("Resume practice").fetchSemanticsNodes().isNotEmpty()
+        composeRule.onAllNodesWithText("Resume").fetchSemanticsNodes().isNotEmpty()
       }
       composeRule.onNodeWithTag("today_primary_action_button")
         .assertIsDisplayed()
-        .assertTextContains("Resume practice", substring = true)
+        .assertTextEquals("Resume")
         .performClick()
       composeRule.waitForIdle()
       composeRule.onNodeWithText("Step 2 of 4 · LOOK (3 min)").assertIsDisplayed()
@@ -252,10 +256,10 @@ class BallerPathFlowRobolectricTest {
       }
       composeRule.onNodeWithTag("nav_today").performClick()
       composeRule.waitUntil(timeoutMillis = 5_000) {
-        composeRule.onAllNodesWithText("Start practice").fetchSemanticsNodes().isNotEmpty()
+        composeRule.onAllNodesWithText("Start").fetchSemanticsNodes().isNotEmpty()
       }
       composeRule.onNodeWithTag("today_primary_action_button")
-        .assertTextContains("Start practice", substring = true)
+        .assertTextEquals("Start")
     }
   }
 
@@ -281,7 +285,7 @@ class BallerPathFlowRobolectricTest {
       composeRule.waitForIdle()
       composeRule.onNodeWithTag("today_primary_action_button")
         .assertIsDisplayed()
-        .assertTextContains("Start practice", substring = true)
+        .assertTextEquals("Start")
     }
   }
 
@@ -297,12 +301,15 @@ class BallerPathFlowRobolectricTest {
     val repo = LocalBallerPathRepository(
       reflectionDao = db.reflectionDao(),
       practiceDraftDao = db.practiceDraftDao(),
+      assignmentDao = db.assignmentDao(),
+      setupStateDao = db.setupStateDao(),
     )
     repo.ensureSeeded()
 
     // Save an unfinished draft and verify no user-submitted reflection exists yet
     repo.saveWorkflowState(
       com.example.data.model.PracticeWorkflowState(
+        assignmentId = SampleDataSource.ASSIGNMENT_PASS_LOOK_DECIDE,
         hasActiveSession = true,
         currentStepId = "decide",
         isReflectionStage = true,
@@ -316,6 +323,7 @@ class BallerPathFlowRobolectricTest {
 
     // Submit reflection -> clears draft and saves reflection in Awaiting Coach state
     val created = repo.submitReflection(
+      assignmentId = SampleDataSource.ASSIGNMENT_PASS_LOOK_DECIDE,
       drillId = SampleDataSource.DRILL_PASS_LOOK_DECIDE,
       drillTitle = "Pass, Look, Decide",
       laneObservation = "Submitted note",

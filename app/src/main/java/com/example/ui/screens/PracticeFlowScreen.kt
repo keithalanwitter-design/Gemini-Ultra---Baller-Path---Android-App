@@ -63,7 +63,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
-import com.example.data.sample.SampleDataSource
 import com.example.ui.components.CoachKeithAvatar
 import com.example.ui.components.FictionalDemoBadge
 import com.example.ui.theme.BurntOrange
@@ -88,7 +87,8 @@ fun PracticeFlowScreen(
   }
 
   val practice = uiState.practice
-  val steps = uiState.todayFocus.steps
+  val assignment = uiState.activePracticeAssignment
+  val steps = assignment.steps
   val totalStages = steps.size + 1
   val currentStageNumber = if (practice.isReflectionStage) totalStages else practice.currentStepIndex + 1
   val currentStep = steps[practice.currentStepIndex.coerceIn(0, steps.lastIndex)]
@@ -120,11 +120,12 @@ fun PracticeFlowScreen(
         title = {
           Column {
             Text(
-              text = stringResource(R.string.practice_title),
+              text = assignment.title,
               style = MaterialTheme.typography.titleMedium,
               color = Color.White,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis,
+              modifier = Modifier.testTag("practice_drill_title"),
             )
             Text(
               text = if (practice.isReflectionStage) {
@@ -141,7 +142,7 @@ fun PracticeFlowScreen(
         },
         actions = {
           FictionalDemoBadge(
-            text = "8 MIN",
+            text = "${assignment.totalMinutes} MIN",
             onDarkBackground = true,
             modifier = Modifier.padding(end = 12.dp),
           )
@@ -191,10 +192,11 @@ fun PracticeFlowScreen(
               )
             }
           } else {
-            val nextLabel = when (practice.currentStepIndex) {
-              0 -> "Next: ${steps[1].title} (${steps[1].durationMinutes} min)"
-              1 -> "Next: ${steps[2].title} (${steps[2].durationMinutes} min)"
-              else -> "Continue to Reflection"
+            val nextLabel = if (practice.currentStepIndex < steps.lastIndex) {
+              val nextStep = steps[practice.currentStepIndex + 1]
+              "Next: ${nextStep.title} (${nextStep.durationMinutes} min)"
+            } else {
+              "Continue to Reflection"
             }
             Button(
               onClick = onNextStage,
@@ -241,7 +243,6 @@ fun PracticeFlowScreen(
           .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
       ) {
-        // Stage Progress Bar
         LinearProgressIndicator(
           progress = { currentStageNumber.toFloat() / totalStages.toFloat() },
           modifier = Modifier
@@ -265,7 +266,6 @@ fun PracticeFlowScreen(
             else -> "Optional timer · Move on anytime"
           }
 
-          // Courtside Step Timer Card — FlowRow ensures buttons remain unobstructed even under large system text
           Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.large,
@@ -354,7 +354,6 @@ fun PracticeFlowScreen(
             }
           }
 
-          // Court Diagram
           Image(
             painter = painterResource(id = R.drawable.img_court_lane_diagram),
             contentDescription = stringResource(R.string.cd_court_diagram),
@@ -365,7 +364,6 @@ fun PracticeFlowScreen(
               .clip(MaterialTheme.shapes.medium),
           )
 
-          // Drill Instruction Card
           Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
@@ -414,7 +412,6 @@ fun PracticeFlowScreen(
             }
           }
 
-          // Coach Keith Voice Cue
           Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
@@ -434,7 +431,6 @@ fun PracticeFlowScreen(
             }
           }
         } else {
-          // Reflection Stage
           Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.large,
@@ -445,17 +441,17 @@ fun PracticeFlowScreen(
               verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
               Text(
-                text = "POST-DRILL REFLECTION",
+                text = "POST-DRILL REFLECTION · ${assignment.title.uppercase()}",
                 style = MaterialTheme.typography.labelMedium,
                 color = BurntOrange,
               )
               Text(
-                text = uiState.todayFocus.reflectionPrompt,
+                text = assignment.reflectionPrompt,
                 style = MaterialTheme.typography.headlineSmall,
                 color = Color.White,
               )
               Text(
-                text = "Unfinished drafts save automatically on this phone. After you submit, your reflection moves to Awaiting Coach in Work + Feedback.",
+                text = "Unfinished drafts save automatically on this phone. After you submit, your reflection moves to Awaiting coach in Work + Feedback.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.85f),
               )
@@ -501,7 +497,7 @@ fun PracticeFlowScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
           ) {
-            SampleDataSource.laneStarterCues.forEach { cue ->
+            assignment.starterCues.forEach { cue ->
               Surface(
                 onClick = { onStarterCueClicked(cue) },
                 modifier = Modifier
@@ -534,7 +530,7 @@ fun PracticeFlowScreen(
               .testTag("reflection_input"),
             label = { Text("What you noticed & chose") },
             placeholder = {
-              Text("Example: My teammate started to drive, so I stayed wide to give them room.")
+              Text("Example: ${assignment.starterCues.firstOrNull().orEmpty()}")
             },
             textStyle = MaterialTheme.typography.bodyLarge,
             minLines = 4,

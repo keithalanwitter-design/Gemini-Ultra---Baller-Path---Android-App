@@ -45,6 +45,7 @@ import com.example.BuildConfig
 import com.example.R
 import com.example.data.model.PlanSession
 import com.example.data.model.SessionStatus
+import com.example.data.model.SetupStage
 import com.example.ui.components.CoachKeithAvatar
 import com.example.ui.components.FictionalDemoBadge
 import com.example.ui.components.HeadlineVisualBanner
@@ -57,10 +58,11 @@ import com.example.ui.viewmodel.BallerPathUiState
 @Composable
 fun PlanScreen(
   uiState: BallerPathUiState,
-  onOpenPractice: () -> Unit,
+  onOpenPractice: (assignmentId: String, forceRestart: Boolean) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val scrollState = rememberScrollState()
+  val setupStage = uiState.setupState.setupStage
   val completedCount = uiState.planSessions.count { it.status == SessionStatus.COMPLETED }
   val totalCount = uiState.planSessions.size.coerceAtLeast(1)
   val plan = uiState.developmentPlan
@@ -85,98 +87,212 @@ fun PlanScreen(
         demoBadgeLabel = if (BuildConfig.DEBUG) "Sample Plan · ${uiState.currentScenario.label}" else "",
       )
 
-      // Coach Keith Development Focus Card from fixture
-      Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        color = NavyDeep,
-      ) {
-        Column(
-          modifier = Modifier.padding(18.dp),
-          verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-          FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-          ) {
-            Text(
-              text = "CURRENT FOCUS",
-              style = MaterialTheme.typography.labelMedium,
-              color = BurntOrange,
-            )
-            FictionalDemoBadge(
-              text = "$completedCount of $totalCount done",
-              onDarkBackground = true,
-            )
-          }
-
-          Text(
-            text = plan.focus,
-            style = MaterialTheme.typography.headlineMedium,
-            color = Color.White,
-          )
-
-          Text(
-            text = "Why it matters: ${plan.why}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.88f),
-          )
-
-          LinearProgressIndicator(
-            progress = { completedCount.toFloat() / totalCount.toFloat() },
+      when (setupStage) {
+        SetupStage.SETUP_IN_PROGRESS -> {
+          Surface(
             modifier = Modifier
               .fillMaxWidth()
-              .height(8.dp)
-              .clip(RoundedCornerShape(50)),
-            color = BurntOrange,
-            trackColor = Color.White.copy(alpha = 0.2f),
-          )
-
-          Surface(
-            shape = MaterialTheme.shapes.small,
-            color = Color.White.copy(alpha = 0.10f),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+              .testTag("plan_setup_in_progress_card"),
+            shape = MaterialTheme.shapes.large,
+            color = NavyDeep,
           ) {
             Column(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-              verticalArrangement = Arrangement.spacedBy(6.dp),
+              modifier = Modifier.padding(18.dp),
+              verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-              Row(verticalAlignment = Alignment.CenterVertically) {
-                CoachKeithAvatar(sizeDp = 34)
-                Spacer(modifier = Modifier.width(10.dp))
-                Column {
-                  Text(
-                    text = "Success standard · ${plan.reviewLabel}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = BurntOrange,
-                  )
-                  Text(
-                    text = plan.successStandard,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White,
-                  )
+              Text(
+                text = "SETUP IN PROGRESS",
+                style = MaterialTheme.typography.labelMedium,
+                color = BurntOrange,
+              )
+              Text(
+                text = "Coach Keith is reviewing ${uiState.player.firstName}'s info.",
+                style = MaterialTheme.typography.headlineSmall,
+                color = Color.White,
+              )
+              Text(
+                text = "You'll get access within 2 business days. Personal weekly drills stay hidden until your family plan is activated.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.88f),
+              )
+            }
+          }
+        }
+        SetupStage.PLAN_BEING_PREPARED -> {
+          Surface(
+            modifier = Modifier
+              .fillMaxWidth()
+              .testTag("plan_being_prepared_card"),
+            shape = MaterialTheme.shapes.large,
+            color = NavyDeep,
+          ) {
+            Column(
+              modifier = Modifier.padding(18.dp),
+              verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+              Text(
+                text = "PLAN BEING PREPARED",
+                style = MaterialTheme.typography.labelMedium,
+                color = BurntOrange,
+              )
+              Text(
+                text = "${uiState.player.firstName}'s personal focus is on the way.",
+                style = MaterialTheme.typography.headlineSmall,
+                color = Color.White,
+              )
+              Text(
+                text = if (uiState.setupState.hasGeneralWorkPublished) {
+                  "While Coach Keith finishes ${uiState.player.firstName}'s weekly focus, general work is published and ready to start below."
+                } else {
+                  "Coach Keith is finalizing ${uiState.player.firstName}'s first personal drills now."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.88f),
+              )
+            }
+          }
+
+          val generalItem = uiState.generalWorkItem
+          if (uiState.setupState.hasGeneralWorkPublished && generalItem != null) {
+            val general = generalItem.assignment
+            PlanSessionCard(
+              session = PlanSession(
+                id = general.assignmentId,
+                assignmentId = general.assignmentId,
+                weekLabel = "General Work",
+                dayLabel = "Published now",
+                title = general.title,
+                durationMinutes = general.totalMinutes,
+                focusSummary = general.focusHeadline,
+                status = if (generalItem.submissions.isNotEmpty() && !general.hasDraftOrSession) {
+                  SessionStatus.COMPLETED
+                } else {
+                  SessionStatus.TODAY
+                },
+                isInteractivePractice = true,
+              ),
+              actionLabel = when {
+                general.hasDraftOrSession -> "Resume"
+                generalItem.submissions.isNotEmpty() -> "Practice ${general.title} Again"
+                else -> "Start"
+              },
+              onOpenPractice = {
+                val restart = generalItem.submissions.isNotEmpty() && !general.hasDraftOrSession
+                onOpenPractice(general.assignmentId, restart)
+              },
+            )
+          }
+        }
+        SetupStage.WORK_READY -> {
+          Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            color = NavyDeep,
+          ) {
+            Column(
+              modifier = Modifier.padding(18.dp),
+              verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+              FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+              ) {
+                Text(
+                  text = "CURRENT FOCUS",
+                  style = MaterialTheme.typography.labelMedium,
+                  color = BurntOrange,
+                )
+                FictionalDemoBadge(
+                  text = "$completedCount of $totalCount done",
+                  onDarkBackground = true,
+                )
+              }
+
+              Text(
+                text = plan.focus,
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+              )
+
+              Text(
+                text = "Why it matters: ${plan.why}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.88f),
+              )
+
+              LinearProgressIndicator(
+                progress = { completedCount.toFloat() / totalCount.toFloat() },
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .height(8.dp)
+                  .clip(RoundedCornerShape(50)),
+                color = BurntOrange,
+                trackColor = Color.White.copy(alpha = 0.2f),
+              )
+
+              Surface(
+                shape = MaterialTheme.shapes.small,
+                color = Color.White.copy(alpha = 0.10f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+              ) {
+                Column(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                  verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                  Row(verticalAlignment = Alignment.CenterVertically) {
+                    CoachKeithAvatar(sizeDp = 34)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                      Text(
+                        text = "Success standard · ${plan.reviewLabel}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = BurntOrange,
+                      )
+                      Text(
+                        text = plan.successStandard,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White,
+                      )
+                    }
+                  }
                 }
               }
             }
           }
+
+          Text(
+            text = "This Week's Sessions",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+          )
+
+          uiState.planSessions.forEach { session ->
+            val workItem = session.assignmentId?.let { aId ->
+              uiState.personalWorkItems.firstOrNull { it.assignment.assignmentId == aId }
+            }
+            val hasDraft = workItem?.assignment?.hasDraftOrSession == true
+            val isSubmitted = workItem?.submissions?.isNotEmpty() == true
+            val label = when {
+              hasDraft -> "Resume"
+              isSubmitted -> "Practice ${session.title} Again"
+              else -> "Start"
+            }
+
+            PlanSessionCard(
+              session = session,
+              actionLabel = label,
+              onOpenPractice = {
+                val targetId = session.assignmentId
+                if (targetId != null) {
+                  onOpenPractice(targetId, isSubmitted && !hasDraft)
+                }
+              },
+            )
+          }
         }
-      }
-
-      Text(
-        text = "This Week's Sessions",
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.onBackground,
-      )
-
-      uiState.planSessions.forEach { session ->
-        PlanSessionCard(
-          session = session,
-          actionLabel = uiState.currentScenario.primaryActionLabel,
-          onOpenPractice = onOpenPractice,
-        )
       }
 
       HeadlineVisualBanner(
@@ -197,7 +313,6 @@ private fun PlanSessionCard(
   onOpenPractice: () -> Unit,
 ) {
   val isToday = session.status == SessionStatus.TODAY
-  val isDone = session.status == SessionStatus.COMPLETED
 
   Card(
     modifier = Modifier
@@ -241,14 +356,14 @@ private fun PlanSessionCard(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
 
-      if (session.isInteractivePractice) {
+      if (session.isInteractivePractice && session.assignmentId != null) {
         Spacer(modifier = Modifier.height(2.dp))
         Button(
           onClick = onOpenPractice,
           modifier = Modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = 48.dp)
-            .testTag("plan_open_practice_button"),
+            .testTag("plan_open_practice_${session.id}"),
           colors = ButtonDefaults.buttonColors(
             containerColor = BurntOrange,
             contentColor = Color.White,
@@ -262,7 +377,7 @@ private fun PlanSessionCard(
           )
           Spacer(modifier = Modifier.width(6.dp))
           Text(
-            text = if (isDone) "Practice Pass, Look, Decide Again" else actionLabel,
+            text = actionLabel,
             style = MaterialTheme.typography.labelLarge,
           )
         }

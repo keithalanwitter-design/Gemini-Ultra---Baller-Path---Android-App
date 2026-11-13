@@ -20,23 +20,27 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.TrackChanges
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,8 +50,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
 import com.example.R
+import com.example.data.model.AssignmentWorkItem
 import com.example.data.model.PracticeReflection
-import com.example.data.model.WorkflowScenarioId
+import com.example.data.model.SetupStage
+import com.example.data.model.WorkFeedbackTab
 import com.example.ui.components.CoachKeithAvatar
 import com.example.ui.components.FictionalDemoBadge
 import com.example.ui.components.HeadlineVisualBanner
@@ -63,12 +69,22 @@ import java.util.Locale
 @Composable
 fun WorkFeedbackScreen(
   uiState: BallerPathUiState,
-  onStartOrResumePractice: () -> Unit,
+  selectedTab: WorkFeedbackTab,
+  onSelectTab: (WorkFeedbackTab) -> Unit,
+  onStartOrResumeAssignment: (String) -> Unit,
   onRevealSampleFeedback: (Long) -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  val scenario = uiState.currentScenario
-  val hasDraft = uiState.practice.reflectionDraft.isNotBlank() || uiState.practice.isReflectionStage
+  val setupStage = uiState.setupState.setupStage
+  val todoItems = uiState.todoWorkItems
+  val awaitingItems = uiState.awaitingCoachItems
+  val respondedItems = uiState.coachRespondedItems
+  val seedEntries = if (setupStage == SetupStage.WORK_READY) uiState.seedReflections else emptyList()
+  val listState = rememberLazyListState()
+
+  LaunchedEffect(selectedTab) {
+    listState.scrollToItem(0)
+  }
 
   Box(
     modifier = modifier
@@ -77,6 +93,7 @@ fun WorkFeedbackScreen(
     contentAlignment = Alignment.TopCenter,
   ) {
     LazyColumn(
+      state = listState,
       modifier = Modifier
         .widthIn(max = 720.dp)
         .fillMaxSize()
@@ -88,7 +105,7 @@ fun WorkFeedbackScreen(
         PlayerHeaderBar(
           playerName = uiState.player.displayName,
           jerseyAndPosition = "${uiState.player.position} · ${uiState.player.grade}",
-          demoBadgeLabel = if (BuildConfig.DEBUG) scenario.label else "",
+          demoBadgeLabel = if (BuildConfig.DEBUG) uiState.currentScenario.label else "",
         )
       }
 
@@ -100,112 +117,155 @@ fun WorkFeedbackScreen(
         )
       }
 
-      // Unfinished draft notice (kept clearly distinct from submitted reflections)
-      if (hasDraft) {
+      if (setupStage == SetupStage.SETUP_IN_PROGRESS) {
         item {
           Surface(
             modifier = Modifier
               .fillMaxWidth()
-              .testTag("work_unfinished_draft_banner"),
-            shape = MaterialTheme.shapes.medium,
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            border = BorderStroke(1.dp, NavyDeep.copy(alpha = 0.35f)),
+              .testTag("work_setup_in_progress_card"),
+            shape = MaterialTheme.shapes.large,
+            color = NavyDeep,
           ) {
             Column(
-              modifier = Modifier.padding(14.dp),
+              modifier = Modifier.padding(16.dp),
               verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
               Text(
-                text = "UNFINISHED DRAFT · NOT SUBMITTED YET",
-                style = MaterialTheme.typography.labelSmall,
-                color = NavyDeep,
+                text = "SETUP IN PROGRESS",
+                style = MaterialTheme.typography.labelMedium,
+                color = BurntOrange,
               )
-              if (uiState.practice.reflectionDraft.isNotBlank()) {
-                Text(
-                  text = "\"${uiState.practice.reflectionDraft}\"",
-                  style = MaterialTheme.typography.bodyMedium,
-                  color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-              }
-              Button(
-                onClick = onStartOrResumePractice,
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .defaultMinSize(minHeight = 48.dp)
-                  .testTag("work_finish_reflection_button"),
-                colors = ButtonDefaults.buttonColors(
-                  containerColor = BurntOrange,
-                  contentColor = Color.White,
-                ),
-                shape = RoundedCornerShape(12.dp),
-              ) {
-                Text(
-                  text = "Finish reflection",
-                  style = MaterialTheme.typography.labelLarge,
-                )
-              }
-            }
-          }
-        }
-      } else if (!uiState.hasSubmittedTodayReflection) {
-        item {
-          Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            border = BorderStroke(1.dp, BurntOrange.copy(alpha = 0.5f)),
-          ) {
-            Column(
-              modifier = Modifier.padding(14.dp),
-              verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
               Text(
-                text = "Today's Pass, Look, Decide reflection isn't submitted yet.",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                text = "Coach Keith is reviewing ${uiState.player.firstName}'s info. You'll get access within 2 business days.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
               )
-              Button(
-                onClick = onStartOrResumePractice,
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .defaultMinSize(minHeight = 48.dp)
-                  .testTag("feedback_start_practice_button"),
-                colors = ButtonDefaults.buttonColors(
-                  containerColor = BurntOrange,
-                  contentColor = Color.White,
-                ),
-                shape = RoundedCornerShape(12.dp),
-              ) {
-                Icon(
-                  imageVector = Icons.Filled.PlayArrow,
-                  contentDescription = null,
-                  modifier = Modifier.size(18.dp),
+            }
+          }
+        }
+      } else {
+        // B3: Three clean views: To do, Awaiting coach, Coach responded
+        item {
+          FlowRow(
+            modifier = Modifier
+              .fillMaxWidth()
+              .testTag("work_feedback_tabs"),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            WorkTabPill(
+              label = "To do",
+              count = todoItems.size,
+              selected = selectedTab == WorkFeedbackTab.TO_DO,
+              testTag = "wf_tab_todo",
+              onClick = { onSelectTab(WorkFeedbackTab.TO_DO) },
+            )
+            WorkTabPill(
+              label = "Awaiting coach",
+              count = awaitingItems.size,
+              selected = selectedTab == WorkFeedbackTab.AWAITING_COACH,
+              testTag = "wf_tab_awaiting",
+              onClick = { onSelectTab(WorkFeedbackTab.AWAITING_COACH) },
+            )
+            WorkTabPill(
+              label = "Coach responded",
+              count = respondedItems.size + seedEntries.size,
+              selected = selectedTab == WorkFeedbackTab.COACH_RESPONDED,
+              testTag = "wf_tab_responded",
+              onClick = { onSelectTab(WorkFeedbackTab.COACH_RESPONDED) },
+            )
+          }
+        }
+
+        when (selectedTab) {
+          WorkFeedbackTab.TO_DO -> {
+            if (todoItems.isEmpty()) {
+              item {
+                EmptyWorkTabCard(
+                  title = "Nothing in To do right now",
+                  body = "All assigned drills are submitted. Check Awaiting coach or Coach responded.",
+                  testTag = "wf_empty_todo",
                 )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                  text = if (scenario == WorkflowScenarioId.IN_PROGRESS) {
-                    "Resume practice"
-                  } else {
-                    "Start practice"
-                  },
-                  style = MaterialTheme.typography.labelLarge,
+              }
+            } else {
+              items(
+                items = todoItems,
+                key = { "todo_${it.assignment.assignmentId}" },
+              ) { item ->
+                TodoAssignmentCard(
+                  workItem = item,
+                  onStartOrResume = { onStartOrResumeAssignment(item.assignment.assignmentId) },
+                )
+              }
+            }
+          }
+
+          WorkFeedbackTab.AWAITING_COACH -> {
+            if (awaitingItems.isEmpty()) {
+              item {
+                EmptyWorkTabCard(
+                  title = "Nothing waiting for review",
+                  body = "Finish a drill in To do and submit your reflection for Coach Keith.",
+                  testTag = "wf_empty_awaiting",
+                )
+              }
+            } else {
+              items(
+                items = awaitingItems,
+                key = { "awaiting_${it.assignment.assignmentId}" },
+              ) { item ->
+                val latest = item.latestSubmission
+                if (latest != null) {
+                  AwaitingCoachAssignmentCard(
+                    workItem = item,
+                    reflection = latest,
+                    playerName = uiState.player.displayName,
+                    reviewLabel = uiState.developmentPlan.reviewLabel,
+                    onRevealSampleFeedback = { onRevealSampleFeedback(latest.id) },
+                  )
+                }
+              }
+            }
+          }
+
+          WorkFeedbackTab.COACH_RESPONDED -> {
+            if (respondedItems.isEmpty() && seedEntries.isEmpty()) {
+              item {
+                EmptyWorkTabCard(
+                  title = "No coach responses yet",
+                  body = "Once Coach Keith reviews a reflection, his response and Try the next rep note appear together here.",
+                  testTag = "wf_empty_responded",
+                )
+              }
+            } else {
+              items(
+                items = respondedItems,
+                key = { "responded_${it.assignment.assignmentId}" },
+              ) { item ->
+                CoachRespondedAssignmentCard(
+                  assignmentId = item.assignment.assignmentId,
+                  drillTitle = item.assignment.title,
+                  submissions = item.submissions,
+                  playerName = uiState.player.displayName,
+                  isSampleSeed = false,
+                )
+              }
+
+              items(
+                items = seedEntries,
+                key = { "seed_${it.id}" },
+              ) { seed ->
+                CoachRespondedAssignmentCard(
+                  assignmentId = seed.assignmentId,
+                  drillTitle = seed.drillTitle,
+                  submissions = listOf(seed),
+                  playerName = uiState.player.displayName,
+                  isSampleSeed = true,
                 )
               }
             }
           }
         }
-      }
-
-      items(
-        items = uiState.reflections,
-        key = { it.id },
-      ) { reflection ->
-        ReflectionComparisonCard(
-          reflection = reflection,
-          playerName = uiState.player.displayName,
-          reviewLabel = uiState.developmentPlan.reviewLabel,
-          onRevealSampleFeedback = { onRevealSampleFeedback(reflection.id) },
-        )
       }
 
       item {
@@ -223,9 +283,189 @@ fun WorkFeedbackScreen(
   }
 }
 
+@Composable
+private fun WorkTabPill(
+  label: String,
+  count: Int,
+  selected: Boolean,
+  testTag: String,
+  onClick: () -> Unit,
+) {
+  Surface(
+    onClick = onClick,
+    modifier = Modifier
+      .defaultMinSize(minHeight = 48.dp)
+      .testTag(testTag),
+    shape = RoundedCornerShape(14.dp),
+    color = if (selected) NavyDeep else MaterialTheme.colorScheme.surface,
+    border = BorderStroke(
+      width = if (selected) 1.5.dp else 1.dp,
+      color = if (selected) BurntOrange else MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+    ),
+  ) {
+    Row(
+      modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+      Text(
+        text = label,
+        style = MaterialTheme.typography.labelLarge,
+        color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+      )
+      Surface(
+        shape = RoundedCornerShape(50),
+        color = if (selected) BurntOrange else MaterialTheme.colorScheme.surfaceVariant,
+      ) {
+        Text(
+          text = "$count",
+          style = MaterialTheme.typography.labelSmall,
+          color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+        )
+      }
+    }
+  }
+}
+
+@Composable
+private fun EmptyWorkTabCard(
+  title: String,
+  body: String,
+  testTag: String,
+) {
+  Card(
+    modifier = Modifier
+      .fillMaxWidth()
+      .testTag(testTag),
+    shape = MaterialTheme.shapes.medium,
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+  ) {
+    Column(
+      modifier = Modifier.padding(16.dp),
+      verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+      Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurface,
+      )
+      Text(
+        text = body,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+    }
+  }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ReflectionComparisonCard(
+private fun TodoAssignmentCard(
+  workItem: AssignmentWorkItem,
+  onStartOrResume: () -> Unit,
+) {
+  val assignment = workItem.assignment
+  val hasDraft = assignment.hasDraftOrSession
+
+  Card(
+    modifier = Modifier
+      .fillMaxWidth()
+      .testTag("todo_card_${assignment.assignmentId}"),
+    shape = MaterialTheme.shapes.large,
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    border = BorderStroke(
+      width = if (hasDraft) 1.5.dp else 1.dp,
+      color = if (hasDraft) BurntOrange else MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+    ),
+  ) {
+    Column(
+      modifier = Modifier.padding(14.dp),
+      verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+      FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+      ) {
+        Column {
+          Text(
+            text = assignment.title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+          )
+          Text(
+            text = "${assignment.dayTag} · ${assignment.totalMinutes} min",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+        FictionalDemoBadge(
+          text = when {
+            assignment.reflectionDraft.isNotBlank() || assignment.isReflectionStage -> "Draft saved"
+            assignment.hasActiveSession -> "In progress"
+            else -> "Ready"
+          },
+        )
+      }
+
+      Text(
+        text = assignment.focusHeadline,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+
+      if (assignment.reflectionDraft.isNotBlank()) {
+        Surface(
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("draft_preview_${assignment.assignmentId}"),
+          shape = MaterialTheme.shapes.small,
+          color = MaterialTheme.colorScheme.secondaryContainer,
+        ) {
+          Text(
+            text = "Draft: \"${assignment.reflectionDraft}\"",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(10.dp),
+          )
+        }
+      }
+
+      Button(
+        onClick = onStartOrResume,
+        modifier = Modifier
+          .fillMaxWidth()
+          .defaultMinSize(minHeight = 48.dp)
+          .testTag("todo_action_${assignment.assignmentId}"),
+        colors = ButtonDefaults.buttonColors(
+          containerColor = BurntOrange,
+          contentColor = Color.White,
+        ),
+        shape = RoundedCornerShape(12.dp),
+      ) {
+        Icon(
+          imageVector = Icons.Filled.PlayArrow,
+          contentDescription = null,
+          modifier = Modifier.size(18.dp),
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+          text = if (hasDraft) "Resume" else "Start",
+          style = MaterialTheme.typography.labelLarge,
+          fontWeight = FontWeight.Bold,
+        )
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AwaitingCoachAssignmentCard(
+  workItem: AssignmentWorkItem,
   reflection: PracticeReflection,
   playerName: String,
   reviewLabel: String,
@@ -237,17 +477,10 @@ private fun ReflectionComparisonCard(
   Card(
     modifier = Modifier
       .fillMaxWidth()
-      .testTag(if (reflection.isSampleSeed) "seed_reflection_card" else "submitted_reflection_card"),
+      .testTag("awaiting_card_${workItem.assignment.assignmentId}"),
     shape = MaterialTheme.shapes.large,
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    border = BorderStroke(
-      width = if (reflection.isSampleSeed) 1.dp else 1.5.dp,
-      color = if (reflection.isSampleSeed) {
-        MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
-      } else {
-        BurntOrange
-      },
-    ),
+    border = BorderStroke(1.5.dp, BurntOrange),
   ) {
     Column(
       modifier = Modifier.padding(14.dp),
@@ -260,126 +493,196 @@ private fun ReflectionComparisonCard(
       ) {
         Column {
           Text(
-            text = reflection.drillTitle,
+            text = workItem.assignment.title,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
           )
           Text(
-            text = if (reflection.isSampleSeed) {
-              "${if (BuildConfig.DEBUG) reflection.readTag else "Day 1 Check-In"} · $timestampLabel"
-            } else if (reflection.isCoachResponseRevealed) {
-              if (BuildConfig.DEBUG) {
-                "Sample feedback ready · $timestampLabel"
-              } else {
-                "Coach responded · $timestampLabel"
-              }
-            } else {
-              "Submitted · $timestampLabel"
-            },
+            text = "Submitted · $timestampLabel",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
         }
         FictionalDemoBadge(
-          text = when {
-            reflection.isSampleSeed -> if (BuildConfig.DEBUG) "Sample Seed" else "Completed"
-            reflection.isCoachResponseRevealed -> "Feedback Ready"
-            else -> "Awaiting Coach"
-          },
+          text = "Awaiting Coach",
           modifier = Modifier.align(Alignment.CenterVertically),
         )
       }
 
-      if (!reflection.isCoachResponseRevealed) {
-        // Submitted reflection + Awaiting Coach state + clearly labeled demo reveal button
-        PlayerObservationBox(
-          playerName = playerName,
-          observation = reflection.laneObservation,
-          modifier = Modifier.fillMaxWidth(),
-        )
+      PlayerObservationBox(
+        playerName = playerName,
+        observation = reflection.laneObservation,
+        modifier = Modifier.fillMaxWidth(),
+      )
 
+      Surface(
+        modifier = Modifier
+          .fillMaxWidth()
+          .testTag("awaiting_coach_card_${workItem.assignment.assignmentId}"),
+        shape = MaterialTheme.shapes.medium,
+        color = NavyDeep,
+      ) {
+        Column(
+          modifier = Modifier.padding(14.dp),
+          verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = Icons.Filled.HourglassTop,
+              contentDescription = null,
+              tint = BurntOrange,
+              modifier = Modifier.size(18.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+              text = "AWAITING COACH",
+              style = MaterialTheme.typography.labelMedium,
+              color = BurntOrange,
+            )
+          }
+          Text(
+            text = "Saved. Coach Keith will review it ${reviewLabel.lowercase()}.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White,
+          )
+        }
+      }
+
+      if (BuildConfig.DEBUG) {
         Surface(
-          modifier = Modifier
-            .fillMaxWidth()
-            .testTag("awaiting_coach_card"),
+          modifier = Modifier.fillMaxWidth(),
           shape = MaterialTheme.shapes.medium,
-          color = NavyDeep,
+          color = MaterialTheme.colorScheme.primaryContainer,
+          border = BorderStroke(1.dp, BurntOrange.copy(alpha = 0.5f)),
         ) {
           Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
           ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+              text = "PROTOTYPE DEMO CONTROL",
+              style = MaterialTheme.typography.labelSmall,
+              color = BurntOrange,
+            )
+            Text(
+              text = "Want to preview what appears after Coach Keith replies?",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            OutlinedButton(
+              onClick = onRevealSampleFeedback,
+              modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 48.dp)
+                .testTag("reveal_feedback_${workItem.assignment.assignmentId}"),
+              shape = RoundedCornerShape(12.dp),
+              border = BorderStroke(1.5.dp, BurntOrange),
+            ) {
               Icon(
-                imageVector = Icons.Filled.HourglassTop,
+                imageVector = Icons.Filled.Visibility,
                 contentDescription = null,
                 tint = BurntOrange,
                 modifier = Modifier.size(18.dp),
               )
               Spacer(modifier = Modifier.width(8.dp))
               Text(
-                text = "AWAITING COACH",
-                style = MaterialTheme.typography.labelMedium,
+                text = "Demo: Reveal Sample Coach Response",
+                style = MaterialTheme.typography.labelLarge,
                 color = BurntOrange,
               )
             }
+          }
+        }
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CoachRespondedAssignmentCard(
+  assignmentId: String,
+  drillTitle: String,
+  submissions: List<PracticeReflection>,
+  playerName: String,
+  isSampleSeed: Boolean,
+) {
+  val dateFormatter = SimpleDateFormat("MMM d · h:mm a", Locale.getDefault())
+  val latest = submissions.first()
+  val timestampLabel = dateFormatter.format(Date(latest.createdAtMillis))
+
+  Card(
+    modifier = Modifier
+      .fillMaxWidth()
+      .testTag(if (isSampleSeed) "seed_reflection_card" else "responded_card_$assignmentId"),
+    shape = MaterialTheme.shapes.large,
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    border = BorderStroke(
+      width = if (isSampleSeed) 1.dp else 1.5.dp,
+      color = if (isSampleSeed) {
+        MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+      } else {
+        BurntOrange
+      },
+    ),
+  ) {
+    Column(
+      modifier = Modifier.padding(14.dp),
+      verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+      FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+      ) {
+        Column {
+          Text(
+            text = drillTitle,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+          )
+          Text(
+            text = if (isSampleSeed) {
+              "${if (BuildConfig.DEBUG) latest.readTag else "Day 1 Check-In"} · $timestampLabel"
+            } else {
+              "Coach responded · $timestampLabel"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+        FictionalDemoBadge(
+          text = if (isSampleSeed) {
+            if (BuildConfig.DEBUG) "Sample Seed" else "Completed"
+          } else {
+            "Coach Responded"
+          },
+          modifier = Modifier.align(Alignment.CenterVertically),
+        )
+      }
+
+      submissions.forEachIndexed { index, entry ->
+        if (index > 0) {
+          HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+          ) {
+            Icon(
+              imageVector = Icons.Outlined.History,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.size(15.dp),
+            )
             Text(
-              text = "Your reflection was saved on this phone. Coach Keith will review it ${reviewLabel.lowercase()}.",
-              style = MaterialTheme.typography.bodyMedium,
-              color = Color.White,
+              text = "Earlier submission · ${dateFormatter.format(Date(entry.createdAtMillis))}",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
           }
         }
 
-        if (BuildConfig.DEBUG) {
-          // Clearly labeled Demo Control to reveal the prewritten sample response
-          Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            border = BorderStroke(1.dp, BurntOrange.copy(alpha = 0.5f)),
-          ) {
-            Column(
-              modifier = Modifier.padding(12.dp),
-              verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-              Text(
-                text = "PROTOTYPE DEMO CONTROL",
-                style = MaterialTheme.typography.labelSmall,
-                color = BurntOrange,
-              )
-              Text(
-                text = "Want to preview what appears after Coach Keith replies?",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-              )
-              OutlinedButton(
-                onClick = onRevealSampleFeedback,
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .defaultMinSize(minHeight = 48.dp)
-                  .testTag("reveal_sample_feedback_button"),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.5.dp, BurntOrange),
-              ) {
-                Icon(
-                  imageVector = Icons.Filled.Visibility,
-                  contentDescription = null,
-                  tint = BurntOrange,
-                  modifier = Modifier.size(18.dp),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                  text = "Demo: Reveal Sample Coach Response",
-                  style = MaterialTheme.typography.labelLarge,
-                  color = BurntOrange,
-                )
-              }
-            }
-          }
-        }
-      } else {
-        // Revealed state: reflection paired with Sample Coach Response and Next Adjustment
+        // Keeps together: player's reflection, Coach Keith's response, and Try the next rep note
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
           val useSideBySide = maxWidth >= 540.dp
           if (useSideBySide) {
@@ -389,12 +692,13 @@ private fun ReflectionComparisonCard(
             ) {
               PlayerObservationBox(
                 playerName = playerName,
-                observation = reflection.laneObservation,
+                observation = entry.laneObservation,
                 modifier = Modifier.weight(1f),
               )
               SampleCoachResponseBox(
-                label = reflection.sampleCoachLabel,
-                response = reflection.sampleCoachResponse,
+                label = entry.sampleCoachLabel,
+                response = entry.sampleCoachResponse,
+                testTag = "coach_response_${assignmentId}_$index",
                 modifier = Modifier.weight(1f),
               )
             }
@@ -405,12 +709,13 @@ private fun ReflectionComparisonCard(
             ) {
               PlayerObservationBox(
                 playerName = playerName,
-                observation = reflection.laneObservation,
+                observation = entry.laneObservation,
                 modifier = Modifier.fillMaxWidth(),
               )
               SampleCoachResponseBox(
-                label = reflection.sampleCoachLabel,
-                response = reflection.sampleCoachResponse,
+                label = entry.sampleCoachLabel,
+                response = entry.sampleCoachResponse,
+                testTag = "coach_response_${assignmentId}_$index",
                 modifier = Modifier.fillMaxWidth(),
               )
             }
@@ -420,7 +725,7 @@ private fun ReflectionComparisonCard(
         Surface(
           modifier = Modifier
             .fillMaxWidth()
-            .testTag("next_adjustment_box"),
+            .testTag("next_rep_${assignmentId}_$index"),
           shape = MaterialTheme.shapes.medium,
           color = MaterialTheme.colorScheme.primaryContainer,
           border = BorderStroke(1.dp, BurntOrange.copy(alpha = 0.45f)),
@@ -444,7 +749,7 @@ private fun ReflectionComparisonCard(
                 fontWeight = FontWeight.Bold,
               )
               Text(
-                text = reflection.nextAdjustment,
+                text = entry.nextAdjustment,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
               )
@@ -498,10 +803,11 @@ private fun PlayerObservationBox(
 private fun SampleCoachResponseBox(
   label: String,
   response: String,
+  testTag: String,
   modifier: Modifier = Modifier,
 ) {
   Surface(
-    modifier = modifier.testTag("sample_coach_response_box"),
+    modifier = modifier.testTag(testTag),
     shape = MaterialTheme.shapes.medium,
     color = NavyDeep,
   ) {

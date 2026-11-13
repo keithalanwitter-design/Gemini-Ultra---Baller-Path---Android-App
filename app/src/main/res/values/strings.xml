@@ -19,5 +19,5 @@
     <string name="reflection_prompt">What did you notice about the lane?</string>
     <string name="submit_reflection">Submit Reflection</string>
     <string name="coach_response_label">Coach Keith</string>
-    <string name="next_adjustment_label">Next Adjustment</string>
+    <string name="next_adjustment_label">Try the next rep</string>
 </resources>
