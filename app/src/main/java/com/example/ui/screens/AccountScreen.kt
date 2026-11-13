@@ -491,7 +491,7 @@ fun AccountScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
           Text(
-            text = "Pilot storage: reflections, drafts, and notes remain local on this device with no login, no ad tracking, and no third-party data sharing.",
+            text = "Pilot storage: reflections, drafts, and optional voice notes remain local on this device with no login, no ad tracking, and no third-party data sharing.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )

@@ -576,61 +576,63 @@ private fun AwaitingCoachAssignmentCard(
         }
       }
 
-      Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.primaryContainer,
-        border = BorderStroke(1.dp, BurntOrange.copy(alpha = 0.5f)),
-      ) {
-        Column(
-          modifier = Modifier.padding(12.dp),
-          verticalArrangement = Arrangement.spacedBy(8.dp),
+      if (BuildConfig.DEBUG) {
+        Surface(
+          modifier = Modifier.fillMaxWidth(),
+          shape = MaterialTheme.shapes.medium,
+          color = MaterialTheme.colorScheme.primaryContainer,
+          border = BorderStroke(1.dp, BurntOrange.copy(alpha = 0.5f)),
         ) {
-          Text(
-            text = "PROTOTYPE DEMO CONTROL",
-            style = MaterialTheme.typography.labelSmall,
-            color = BurntOrange,
-          )
-          Text(
-            text = "Want to preview what appears after Coach Keith replies?",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-          )
-          OutlinedButton(
-            onClick = onRevealSampleFeedback,
-            modifier = Modifier
-              .fillMaxWidth()
-              .defaultMinSize(minHeight = 48.dp)
-              .semantics {
-                contentDescription = "Demo: Reveal sample Coach Keith response for ${workItem.assignment.title}"
-              }
-              .testTag("reveal_feedback_${workItem.assignment.assignmentId}"),
-            shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.5.dp, BurntOrange),
+          Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
           ) {
-            Icon(
-              imageVector = Icons.Filled.Visibility,
-              contentDescription = null,
-              tint = BurntOrange,
-              modifier = Modifier.size(18.dp),
-            )
-            Spacer(modifier = Modifier.width(8.dp))
             Text(
-              text = "Demo: Reveal Sample Coach Response",
-              style = MaterialTheme.typography.labelLarge,
+              text = "PROTOTYPE DEMO CONTROL",
+              style = MaterialTheme.typography.labelSmall,
               color = BurntOrange,
             )
+            Text(
+              text = "Want to preview what appears after Coach Keith replies?",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            OutlinedButton(
+              onClick = onRevealSampleFeedback,
+              modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 48.dp)
+                .semantics {
+                  contentDescription = "Demo: Reveal sample Coach Keith response for ${workItem.assignment.title}"
+                }
+                .testTag("reveal_feedback_${workItem.assignment.assignmentId}"),
+              shape = RoundedCornerShape(12.dp),
+              border = BorderStroke(1.5.dp, BurntOrange),
+            ) {
+              Icon(
+                imageVector = Icons.Filled.Visibility,
+                contentDescription = null,
+                tint = BurntOrange,
+                modifier = Modifier.size(18.dp),
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(
+                text = "Demo: Reveal Sample Coach Response",
+                style = MaterialTheme.typography.labelLarge,
+                color = BurntOrange,
+              )
+            }
           }
         }
-      }
 
-      CoachFeedbackStudioSection(
-        assignmentId = workItem.assignment.assignmentId,
-        drillTitle = workItem.assignment.title,
-        initialCoachResponse = reflection.sampleCoachResponse,
-        initialNextAdjustment = reflection.nextAdjustment,
-        onSaveCoachFeedback = onSaveCustomCoachFeedback,
-      )
+        CoachFeedbackStudioSection(
+          assignmentId = workItem.assignment.assignmentId,
+          drillTitle = workItem.assignment.title,
+          initialCoachResponse = "",
+          initialNextAdjustment = "",
+          onSaveCoachFeedback = onSaveCustomCoachFeedback,
+        )
+      }
     }
   }
 }
@@ -802,7 +804,7 @@ private fun CoachRespondedAssignmentCard(
         }
       }
 
-      if (!isSampleSeed) {
+      if (BuildConfig.DEBUG && !isSampleSeed) {
         CoachFeedbackStudioSection(
           assignmentId = assignmentId,
           drillTitle = drillTitle,

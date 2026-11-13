@@ -820,37 +820,43 @@ class TwoAssignmentFlowRobolectricTest {
         .performScrollToNode(hasTestTag("dev_stats_chart_card"))
       composeRule.onNodeWithTag("dev_stats_chart_card").assertIsDisplayed()
       composeRule.onNodeWithTag("dev_stats_bar_chart").assertIsDisplayed()
+      composeRule.onNodeWithTag("stats_logged_only_badge")
+        .performScrollTo()
+        .assertTextContains("Logged Work Only", substring = true)
 
-      // Verify all 7 day bars exist and initial total is 51 min (10+8+0+14+7+12+0)
+      // Verify all 7 day bars exist and initial totals exclude the sample week (0 min, 0 / 7, 0 min)
       composeRule.onNodeWithTag("stats_total_value")
         .performScrollTo()
-        .assertTextContains("51 min", substring = true)
+        .assertTextContains("0 min", substring = true)
+      composeRule.onNodeWithTag("stats_active_days_value")
+        .performScrollTo()
+        .assertTextContains("0 / 7", substring = true)
+      composeRule.onNodeWithTag("stats_best_day_value")
+        .performScrollTo()
+        .assertTextContains("0 min", substring = true)
       (0..6).forEach { idx ->
         composeRule.onNodeWithTag("stats_day_bar_$idx")
           .performScrollTo()
           .assertIsDisplayed()
       }
 
-      // 2. Tap an earlier day bar (offset -3 -> index 3: 14 min / 20 reps) and verify detail card
+      // 2. Tap an earlier sample reference day bar (index 3) and verify sample day label & exclusion note
       composeRule.onNodeWithTag("stats_day_bar_3").performScrollTo().performClick()
       composeRule.waitForIdle()
       composeRule.onNodeWithTag("stats_selected_day_detail")
         .performScrollTo()
         .assertTextContains("Spacing After the Pass", substring = true)
-        .assertTextContains("14 practice minutes", substring = true)
+        .assertTextContains("Sample Week 2 Log", substring = true)
+        .assertTextContains("Excluded from 7-day logged totals", substring = true)
 
-      // 3. Toggle to Focus Reps metric and verify totals update (14+12+0+20+10+18+0 = 74 reps)
-      composeRule.onNodeWithTag("stats_metric_reps").performScrollTo().performClick()
+      // 3. Tap a rest day bar (index 2) and verify Rest Day label
+      composeRule.onNodeWithTag("stats_day_bar_2").performScrollTo().performClick()
       composeRule.waitForIdle()
-      composeRule.onNodeWithTag("stats_total_value")
+      composeRule.onNodeWithTag("stats_selected_day_detail")
         .performScrollTo()
-        .assertTextContains("74 reps", substring = true)
+        .assertTextContains("Rest Day", substring = true)
 
-      // Switch back to Practice Min
-      composeRule.onNodeWithTag("stats_metric_minutes").performScrollTo().performClick()
-      composeRule.waitForIdle()
-
-      // 4. Submit Today's Pass, Look, Decide (8 min) and verify Today's bar updates live
+      // 4. Submit Today's Pass, Look, Decide (8 min) and verify Today's bar and totals update live
       composeRule.onNodeWithTag("nav_today").performClick()
       composeRule.waitUntil(timeoutMillis = 5_000) {
         composeRule.onAllNodesWithTag("today_primary_action_button").fetchSemanticsNodes().isNotEmpty()
@@ -875,7 +881,13 @@ class TwoAssignmentFlowRobolectricTest {
         .performScrollToNode(hasTestTag("dev_stats_chart_card"))
       composeRule.onNodeWithTag("stats_total_value")
         .performScrollTo()
-        .assertTextContains("59 min", substring = true)
+        .assertTextContains("8 min", substring = true)
+      composeRule.onNodeWithTag("stats_active_days_value")
+        .performScrollTo()
+        .assertTextContains("1 / 7", substring = true)
+      composeRule.onNodeWithTag("stats_best_day_value")
+        .performScrollTo()
+        .assertTextContains("8 min", substring = true)
       composeRule.onNodeWithTag("stats_day_bar_6").performScrollTo().performClick()
       composeRule.waitForIdle()
       composeRule.onNodeWithTag("stats_selected_day_detail")
@@ -887,6 +899,9 @@ class TwoAssignmentFlowRobolectricTest {
 
   @Test
   fun voiceRecorder_playerJournalingTranscription_andCoachVoiceToTextFeedbackStudio_workEndToEnd() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val app = context as Application
+
     ActivityScenario.launch(MainActivity::class.java).use {
       composeRule.waitUntil(timeoutMillis = 5_000) {
         composeRule.onAllNodesWithTag("today_primary_action_button").fetchSemanticsNodes().isNotEmpty()
@@ -902,61 +917,65 @@ class TwoAssignmentFlowRobolectricTest {
       composeRule.onNodeWithTag("practice_next_button").performClick()
       composeRule.waitForIdle()
 
-      // 2. Tap the Speech-to-Text microphone icon inside the reflection text input field
-      val expectedPlayerTranscript = SampleDataSource.assignmentOne.starterCues.first()
+      // 2. Before RECORD_AUDIO permission is granted, tapping the mic button shows the in-app explanation
+      //    and never starts listening or inserts starter text into reflection_input
       composeRule.onNodeWithTag("reflection_mic_button")
         .performScrollTo()
         .assertIsDisplayed()
         .performClick()
       composeRule.waitForIdle()
 
-      composeRule.onNodeWithTag("reflection_stt_listening_banner")
+      composeRule.onNodeWithTag("reflection_mic_rationale_card")
         .performScrollTo()
         .assertIsDisplayed()
-      composeRule.onNodeWithTag("reflection_input")
-        .performScrollTo()
-        .assertTextContains(expectedPlayerTranscript, substring = true)
+        .assertTextContains("The microphone is optional", substring = true)
+        .assertTextContains("stay on this device", substring = true)
+      assertTrue(
+        composeRule.onAllNodesWithTag("reflection_stt_listening_banner").fetchSemanticsNodes().isEmpty()
+      )
+      assertTrue(
+        composeRule.onAllNodesWithTag("draft_saved_indicator").fetchSemanticsNodes().isEmpty()
+      )
 
-      // Tap microphone icon again to stop active Speech-to-Text listening
+      // Dismiss rationale via "Type Instead"
+      composeRule.onNodeWithTag("reflection_mic_rationale_cancel")
+        .performScrollTo()
+        .performClick()
+      composeRule.waitForIdle()
+
+      // 3. Grant RECORD_AUDIO permission and test when on-device recognition is unavailable:
+      //    verify it shows "Voice-to-text isn't available on this device", does NOT fall back to cloud or stay listening,
+      //    and NEVER inserts canned starter text
+      Shadows.shadowOf(app).grantPermissions(android.Manifest.permission.RECORD_AUDIO)
+      org.robolectric.shadows.ShadowSpeechRecognizer.setIsOnDeviceRecognitionAvailable(false)
       composeRule.onNodeWithTag("reflection_mic_button")
         .performScrollTo()
         .performClick()
       composeRule.waitForIdle()
 
-      // Also verify the Voice Recorder & Transcription Studio card and Play Voice Note
-      composeRule.onNodeWithTag("player_voice_recorder_card")
+      composeRule.onNodeWithTag("reflection_stt_status_banner")
         .performScrollTo()
         .assertIsDisplayed()
-      composeRule.onNodeWithTag("player_voice_record_button")
-        .performScrollTo()
-        .assertTextContains("Record & Transcribe", substring = true)
-        .performClick()
-      composeRule.waitForIdle()
+        .assertTextContains("Voice-to-text isn't available on this device", substring = true)
+      assertTrue(
+        composeRule.onAllNodesWithTag("reflection_stt_listening_banner").fetchSemanticsNodes().isEmpty()
+      )
+      assertTrue(
+        composeRule.onAllNodesWithTag("draft_saved_indicator").fetchSemanticsNodes().isEmpty()
+      )
 
-      composeRule.onNodeWithTag("player_voice_record_button")
-        .performScrollTo()
-        .assertTextContains("Stop & Transcribe", substring = true)
-        .performClick()
-      composeRule.waitForIdle()
-
-      // Verify transcribed speech populated the reflection input, saved the draft, and enabled Play Voice Note
+      // 4. Type a real reflection and submit
+      val playerTypedReflection = "My teammate drove middle so I held wide corner spacing."
       composeRule.onNodeWithTag("reflection_input")
         .performScrollTo()
-        .assertTextContains(expectedPlayerTranscript, substring = true)
-      composeRule.onNodeWithTag("draft_saved_indicator")
-        .performScrollTo()
-        .assertIsDisplayed()
-      composeRule.onNodeWithTag("player_voice_play_button")
-        .performScrollTo()
-        .assertIsDisplayed()
-
-      // Submit the voice-transcribed reflection
+        .performTextInput(playerTypedReflection)
       composeRule.onNodeWithTag("submit_reflection_button").performClick()
       composeRule.waitUntil(timeoutMillis = 5_000) {
         composeRule.onAllNodesWithTag("awaiting_card_$assign1Id").fetchSemanticsNodes().isNotEmpty()
       }
 
-      // 3. Open Coach Keith Voice-to-Text & Feedback Studio in Awaiting coach
+      // 5. Open debug-only Coach Keith Studio in Awaiting coach:
+      //    verify empty Save does NOT auto-fill canned Coach Keith sentences
       composeRule.onNodeWithTag("toggle_coach_studio_$assign1Id")
         .performScrollTo()
         .assertIsDisplayed()
@@ -967,35 +986,36 @@ class TwoAssignmentFlowRobolectricTest {
         .performScrollTo()
         .assertIsDisplayed()
 
-      // Start & stop Coach Keith voice dictation
-      composeRule.onNodeWithTag("coach_voice_record_$assign1Id")
+      composeRule.onNodeWithTag("save_custom_coach_feedback_$assign1Id")
         .performScrollTo()
-        .assertTextContains("Dictate Coach Note", substring = true)
         .performClick()
       composeRule.waitForIdle()
 
-      composeRule.onNodeWithTag("coach_voice_record_$assign1Id")
+      composeRule.onNodeWithTag("coach_studio_validation_error_$assign1Id")
         .performScrollTo()
-        .assertTextContains("Stop & Transcribe Coach Note", substring = true)
-        .performClick()
-      composeRule.waitForIdle()
+        .assertIsDisplayed()
 
-      // Verify Coach Keith's voice note transcribed into the feedback input and Save works
+      // Enter custom Coach Keith feedback and save
+      val customCoachNote = "Coach Keith debug note: Great patience holding the corner passing window."
+      val customNextRep = "Call out the help defender's chest angle on your next two reps."
       composeRule.onNodeWithTag("coach_response_input_$assign1Id")
         .performScrollTo()
-        .assertTextContains("Voice note from Coach Keith", substring = true)
+        .performTextInput(customCoachNote)
+      composeRule.onNodeWithTag("coach_next_rep_input_$assign1Id")
+        .performScrollTo()
+        .performTextInput(customNextRep)
       composeRule.onNodeWithTag("save_custom_coach_feedback_$assign1Id")
         .performScrollTo()
         .performClick()
 
-      // 4. Verify transition to Coach responded with the transcribed coach note and Listen button
+      // 6. Verify transition to Coach responded with the custom coach note and Listen button
       composeRule.waitUntil(timeoutMillis = 5_000) {
         composeRule.onAllNodesWithTag("responded_card_$assign1Id").fetchSemanticsNodes().isNotEmpty()
       }
       composeRule.onNodeWithTag("coach_response_${assign1Id}_0")
         .performScrollTo()
         .assertIsDisplayed()
-      composeRule.onNodeWithText("Voice note from Coach Keith", substring = true)
+      composeRule.onNodeWithText(customCoachNote, substring = true)
         .performScrollTo()
         .assertIsDisplayed()
       composeRule.onNodeWithTag("listen_coach_response_${assign1Id}_0")
@@ -1006,4 +1026,5 @@ class TwoAssignmentFlowRobolectricTest {
     }
   }
 }
+
 

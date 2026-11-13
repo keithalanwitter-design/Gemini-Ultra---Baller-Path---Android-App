@@ -14,15 +14,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BarChart
@@ -36,7 +33,6 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,7 +55,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.model.DailyDevelopmentStat
-import com.example.data.model.DevelopmentMetric
 import com.example.ui.theme.BurntOrange
 import com.example.ui.theme.BurntOrangeDark
 import com.example.ui.theme.BurntOrangeTint
@@ -78,32 +73,34 @@ fun DevelopmentStatsChartCard(
 ) {
   if (stats.isEmpty()) return
 
-  var selectedMetric by remember { mutableStateOf(DevelopmentMetric.PRACTICE_MINUTES) }
   val defaultSelectedIndex = remember(stats) {
-    val todayIdx = stats.indexOfLast { it.dayOffsetFromToday == 0 }
-    if (todayIdx >= 0 && stats[todayIdx].hasLiveSubmission) {
-      todayIdx
+    val latestLoggedIdx = stats.indexOfLast { it.hasLiveSubmission }
+    if (latestLoggedIdx >= 0) {
+      latestLoggedIdx
     } else {
-      stats.indexOfLast { it.practiceMinutes > 0 }.takeIf { it >= 0 } ?: stats.lastIndex
+      stats.lastIndex
     }
   }
   var selectedDayIndex by remember(stats.size) { mutableIntStateOf(defaultSelectedIndex) }
   val safeSelectedIndex = selectedDayIndex.coerceIn(0, stats.lastIndex)
   val selectedDay = stats[safeSelectedIndex]
 
-  val values = remember(stats, selectedMetric) {
-    stats.map { it.valueFor(selectedMetric) }
+  // Only real submitted work is included in 7-Day Total, Best Day, Active Days, and bar heights.
+  val loggedValues = remember(stats) {
+    stats.map { it.practiceMinutes }
   }
-  val totalValue = remember(values) { values.sum() }
-  val activeDays = remember(stats) { stats.count { it.practiceMinutes > 0 || it.focusReps > 0 } }
-  val bestValue = remember(values) { values.maxOrNull() ?: 0 }
-  val chartCeiling = remember(bestValue, selectedMetric) {
-    val step = if (selectedMetric == DevelopmentMetric.PRACTICE_MINUTES) 5 else 10
-    val rawMax = bestValue.coerceAtLeast(step * 2)
-    (ceil(rawMax / step.toFloat()).toInt() * step).coerceAtLeast(step * 2)
+  val totalLoggedMinutes = remember(loggedValues) { loggedValues.sum() }
+  val activeDays = remember(stats) { stats.count { it.hasLiveSubmission && it.practiceMinutes > 0 } }
+  val bestDayMinutes = remember(loggedValues) { loggedValues.maxOrNull() ?: 0 }
+  val chartCeiling = remember(bestDayMinutes) {
+    val step = 5
+    val rawMax = bestDayMinutes.coerceAtLeast(10)
+    (ceil(rawMax / step.toFloat()).toInt() * step).coerceAtLeast(10)
   }
 
-  val chartAccessibilitySummary = stringResource(R.string.cd_dev_stats_chart)
+  val baseChartDesc = stringResource(R.string.cd_dev_stats_chart)
+  val chartAccessibilitySummary =
+    "$baseChartDesc. 7-day logged total: $totalLoggedMinutes min across $activeDays of 7 active days. Best day: $bestDayMinutes min."
 
   Card(
     modifier = modifier
@@ -117,7 +114,7 @@ fun DevelopmentStatsChartCard(
       modifier = Modifier.padding(16.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-      // Header + Fictional Sample/Local label
+      // Header + Clear Logged-Work-Only Badge
       FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -152,31 +149,15 @@ fun DevelopmentStatsChartCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
         }
-        FictionalDemoBadge(text = "7-Day Log")
-      }
-
-      // Metric Selector Toggle Pills (48dp min touch targets)
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-      ) {
-        MetricSelectorChip(
-          label = stringResource(R.string.dev_stats_metric_minutes),
-          isSelected = selectedMetric == DevelopmentMetric.PRACTICE_MINUTES,
-          testTag = "stats_metric_minutes",
-          onClick = { selectedMetric = DevelopmentMetric.PRACTICE_MINUTES },
-          modifier = Modifier.weight(1f),
-        )
-        MetricSelectorChip(
-          label = stringResource(R.string.dev_stats_metric_reps),
-          isSelected = selectedMetric == DevelopmentMetric.FOCUS_REPS,
-          testTag = "stats_metric_reps",
-          onClick = { selectedMetric = DevelopmentMetric.FOCUS_REPS },
-          modifier = Modifier.weight(1f),
+        FictionalDemoBadge(
+          text = stringResource(R.string.dev_stats_badge_logged_only),
+          modifier = Modifier
+            .semantics(mergeDescendants = true) {}
+            .testTag("stats_logged_only_badge"),
         )
       }
 
-      // 3-KPI Summary Row
+      // 3-KPI Summary Row (strictly real submitted practice minutes)
       Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -190,7 +171,7 @@ fun DevelopmentStatsChartCard(
         ) {
           StatSummaryCell(
             label = stringResource(R.string.dev_stats_total_label),
-            value = "$totalValue ${selectedMetric.unit}",
+            value = "$totalLoggedMinutes min",
             modifier = Modifier
               .weight(1f)
               .testTag("stats_total_value"),
@@ -204,7 +185,7 @@ fun DevelopmentStatsChartCard(
           )
           StatSummaryCell(
             label = stringResource(R.string.dev_stats_best_day_label),
-            value = "$bestValue ${selectedMetric.unit}",
+            value = "$bestDayMinutes min",
             modifier = Modifier
               .weight(1f)
               .testTag("stats_best_day_value"),
@@ -212,7 +193,7 @@ fun DevelopmentStatsChartCard(
         }
       }
 
-      // Native Compose 7-Day Bar Chart Area
+      // Native Compose 7-Day Bar Chart Area (bars represent real logged minutes only)
       Column(
         modifier = Modifier
           .fillMaxWidth()
@@ -226,12 +207,12 @@ fun DevelopmentStatsChartCard(
           verticalAlignment = Alignment.CenterVertically,
         ) {
           Text(
-            text = "${selectedMetric.label} (${selectedMetric.unit})",
+            text = "Logged Practice Minutes (min)",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
           Text(
-            text = "Scale: 0 – $chartCeiling ${selectedMetric.unit}",
+            text = "Scale: 0 – $chartCeiling min",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -245,7 +226,6 @@ fun DevelopmentStatsChartCard(
             .fillMaxWidth()
             .height(176.dp),
         ) {
-          // Horizontal dashed guide lines + solid baseline drawn behind bars
           Canvas(
             modifier = Modifier
               .fillMaxSize()
@@ -284,8 +264,8 @@ fun DevelopmentStatsChartCard(
             verticalAlignment = Alignment.Bottom,
           ) {
             stats.forEachIndexed { index, stat ->
-              val rawValue = stat.valueFor(selectedMetric)
-              val targetFraction = (rawValue.toFloat() / chartCeiling.toFloat()).coerceIn(0f, 1f)
+              val loggedMinutes = stat.practiceMinutes
+              val targetFraction = (loggedMinutes.toFloat() / chartCeiling.toFloat()).coerceIn(0f, 1f)
               val animatedFraction by animateFloatAsState(
                 targetValue = targetFraction,
                 animationSpec = spring(
@@ -295,13 +275,12 @@ fun DevelopmentStatsChartCard(
                 label = "bar_height_$index",
               )
               val isSelected = index == safeSelectedIndex
-              val isTodayLive = stat.dayOffsetFromToday == 0 && stat.hasLiveSubmission
 
               val barBrush = when {
-                rawValue == 0 -> Brush.verticalGradient(
+                loggedMinutes == 0 -> Brush.verticalGradient(
                   colors = listOf(OutlineWarm.copy(alpha = 0.65f), OutlineWarm.copy(alpha = 0.45f)),
                 )
-                isSelected || isTodayLive -> Brush.verticalGradient(
+                isSelected || stat.dayOffsetFromToday == 0 -> Brush.verticalGradient(
                   colors = listOf(BurntOrange, BurntOrangeDark),
                 )
                 else -> Brush.verticalGradient(
@@ -311,8 +290,17 @@ fun DevelopmentStatsChartCard(
 
               val dayDesc = buildString {
                 append("${stat.dayLabel} (${stat.fullDateLabel}): ")
-                append("${stat.practiceMinutes} practice minutes, ${stat.focusReps} focus reps. ")
-                append("Focus: ${stat.focusTag}.")
+                when {
+                  stat.hasLiveSubmission -> {
+                    append("Logged by $playerFirstName, $loggedMinutes practice minutes. Focus: ${stat.focusTag}.")
+                  }
+                  stat.isSampleReferenceDay -> {
+                    append("Sample Week 2 Log (${stat.samplePreviewMinutes} min sample reference, excluded from 7-day totals), 0 logged practice minutes. Focus: ${stat.focusTag}.")
+                  }
+                  else -> {
+                    append("Rest Day, 0 logged practice minutes.")
+                  }
+                }
                 if (isSelected) append(" Selected.")
               }
 
@@ -337,25 +325,23 @@ fun DevelopmentStatsChartCard(
                   .testTag("stats_day_bar_$index"),
                 horizontalAlignment = Alignment.CenterHorizontally,
               ) {
-                // Numeric value label above bar
                 Box(
                   modifier = Modifier.height(24.dp),
                   contentAlignment = Alignment.BottomCenter,
                 ) {
                   Text(
-                    text = if (rawValue > 0) "$rawValue" else "–",
+                    text = if (loggedMinutes > 0) "$loggedMinutes" else "0",
                     style = MaterialTheme.typography.labelSmall,
                     color = when {
                       isSelected -> BurntOrangeDark
-                      rawValue > 0 -> MaterialTheme.colorScheme.onSurface
+                      loggedMinutes > 0 -> MaterialTheme.colorScheme.onSurface
                       else -> MaterialTheme.colorScheme.onSurfaceVariant
                     },
-                    fontWeight = if (isSelected || isTodayLive) FontWeight.Bold else FontWeight.Medium,
+                    fontWeight = if (isSelected || loggedMinutes > 0) FontWeight.Bold else FontWeight.Medium,
                     maxLines = 1,
                   )
                 }
 
-                // Bar track & filled bar
                 Box(
                   modifier = Modifier
                     .weight(1f)
@@ -363,7 +349,7 @@ fun DevelopmentStatsChartCard(
                     .padding(horizontal = 4.dp, vertical = 2.dp),
                   contentAlignment = Alignment.BottomCenter,
                 ) {
-                  val displayFraction = if (rawValue == 0) 0.05f else animatedFraction.coerceAtLeast(0.1f)
+                  val displayFraction = if (loggedMinutes == 0) 0.05f else animatedFraction.coerceAtLeast(0.12f)
                   Box(
                     modifier = Modifier
                       .fillMaxWidth(0.78f)
@@ -373,7 +359,6 @@ fun DevelopmentStatsChartCard(
                   )
                 }
 
-                // Day label below baseline
                 Box(
                   modifier = Modifier.height(28.dp),
                   contentAlignment = Alignment.Center,
@@ -394,11 +379,29 @@ fun DevelopmentStatsChartCard(
         }
       }
 
-      // Selected Day Detail Card (updates on bar tap)
+      // Selected Day Detail Card (clearly distinguishes Logged by Maya, Sample Week 2 Log, and Rest Day)
+      val dayTypeLabel = when {
+        selectedDay.hasLiveSubmission -> "Logged by $playerFirstName"
+        selectedDay.isSampleReferenceDay -> "Sample Week 2 Log"
+        else -> "Rest Day"
+      }
+      val dayDetailSubtitle = when {
+        selectedDay.hasLiveSubmission ->
+          "${selectedDay.practiceMinutes} practice minutes logged on this device."
+        selectedDay.isSampleReferenceDay ->
+          "Sample reference (${selectedDay.samplePreviewMinutes} min) · Excluded from 7-day logged totals."
+        selectedDay.dayOffsetFromToday == 0 ->
+          "0 practice minutes logged yet today. Submit a drill reflection to log real minutes."
+        else ->
+          "Scheduled recovery / rest day · 0 practice minutes logged."
+      }
+
       Surface(
         modifier = Modifier
           .fillMaxWidth()
-          .semantics(mergeDescendants = true) {}
+          .semantics(mergeDescendants = true) {
+            contentDescription = "${selectedDay.dayLabel} (${selectedDay.fullDateLabel}), $dayTypeLabel: ${selectedDay.focusTag}. $dayDetailSubtitle"
+          }
           .testTag("stats_selected_day_detail"),
         shape = MaterialTheme.shapes.medium,
         color = NavyDeep,
@@ -427,11 +430,7 @@ fun DevelopmentStatsChartCard(
               },
             ) {
               Text(
-                text = when {
-                  selectedDay.hasLiveSubmission -> "Logged by $playerFirstName"
-                  selectedDay.practiceMinutes == 0 -> "Rest Day"
-                  else -> "Sample Week 2 Log"
-                },
+                text = dayTypeLabel,
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.White,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
@@ -444,64 +443,12 @@ fun DevelopmentStatsChartCard(
             color = Color.White,
           )
           Text(
-            text = if (selectedDay.practiceMinutes == 0 && selectedDay.focusReps == 0) {
-              if (selectedDay.dayOffsetFromToday == 0) {
-                "Complete today's drill and reflection to log minutes and focus reps here."
-              } else {
-                "Scheduled recovery day with 0 practice minutes logged."
-              }
-            } else {
-              "${selectedDay.practiceMinutes} practice minutes · ${selectedDay.focusReps} focus reps"
-            },
+            text = dayDetailSubtitle,
             style = MaterialTheme.typography.bodySmall,
             color = Color.White.copy(alpha = 0.85f),
           )
         }
       }
-    }
-  }
-}
-
-@Composable
-private fun MetricSelectorChip(
-  label: String,
-  isSelected: Boolean,
-  testTag: String,
-  onClick: () -> Unit,
-  modifier: Modifier = Modifier,
-) {
-  Surface(
-    onClick = onClick,
-    modifier = modifier
-      .defaultMinSize(minHeight = 48.dp)
-      .semantics(mergeDescendants = true) {
-        contentDescription = "$label chart view${if (isSelected) ", selected" else ""}"
-        selected = isSelected
-        role = Role.Button
-      }
-      .testTag(testTag),
-    shape = RoundedCornerShape(12.dp),
-    color = if (isSelected) NavyDeep else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-    border = BorderStroke(
-      width = if (isSelected) 1.5.dp else 1.dp,
-      color = if (isSelected) BurntOrange else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-    ),
-  ) {
-    Box(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 10.dp, vertical = 10.dp),
-      contentAlignment = Alignment.Center,
-    ) {
-      Text(
-        text = label,
-        style = MaterialTheme.typography.labelLarge,
-        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
     }
   }
 }

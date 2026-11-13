@@ -232,7 +232,8 @@ private fun TodayActiveHeroContent(
     scenario == WorkflowScenarioId.MORE_WORK_READY ->
       if (BuildConfig.DEBUG) "More work ready" else "Practice ready"
     scenario == WorkflowScenarioId.AWAITING_COACH -> "Awaiting coach"
-    scenario == WorkflowScenarioId.FEEDBACK_READY -> "Sample feedback ready"
+    scenario == WorkflowScenarioId.FEEDBACK_READY ->
+      if (BuildConfig.DEBUG) "Sample feedback ready" else "Coach responded"
     else -> "Practice ready"
   }
 

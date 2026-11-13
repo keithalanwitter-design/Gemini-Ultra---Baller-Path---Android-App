@@ -249,8 +249,10 @@ class LocalBallerPathRepository(
     coachResponse: String,
     nextAdjustment: String,
   ) {
-    val cleanResponse = coachResponse.trim().ifEmpty { SampleDataSource.FIXTURE_COACH_RESPONSE }
-    val cleanNextRep = nextAdjustment.trim().ifEmpty { SampleDataSource.FIXTURE_NEXT_ADJUSTMENT }
+    if (!com.example.BuildConfig.DEBUG) return
+    val cleanResponse = coachResponse.trim()
+    val cleanNextRep = nextAdjustment.trim()
+    if (cleanResponse.isEmpty() || cleanNextRep.isEmpty()) return
     reflectionDao.updateCoachFeedback(
       id = reflectionId,
       coachResponse = cleanResponse,

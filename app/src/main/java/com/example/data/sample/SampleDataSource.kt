@@ -361,19 +361,18 @@ object SampleDataSource {
   }
 
   private data class SampleDayBaseline(
-    val practiceMinutes: Int,
-    val focusReps: Int,
+    val sampleMinutes: Int,
     val focusTag: String,
   )
 
   private val sevenDaySampleBaselines = mapOf(
-    -6 to SampleDayBaseline(10, 14, "Two-Ball Eyes Up"),
-    -5 to SampleDayBaseline(8, 12, "Pocket Pound & Scan"),
-    -4 to SampleDayBaseline(0, 0, "Recovery / Rest Day"),
-    -3 to SampleDayBaseline(14, 20, "Spacing After the Pass"),
-    -2 to SampleDayBaseline(7, 10, "Target Pass & Eyes Up"),
-    -1 to SampleDayBaseline(12, 18, "Corner Sightline Footwork"),
-    0 to SampleDayBaseline(0, 0, "Ready for Today's Drill"),
+    -6 to SampleDayBaseline(10, "Two-Ball Eyes Up"),
+    -5 to SampleDayBaseline(8, "Pocket Pound & Scan"),
+    -4 to SampleDayBaseline(0, "Recovery / Rest Day"),
+    -3 to SampleDayBaseline(14, "Spacing After the Pass"),
+    -2 to SampleDayBaseline(7, "Target Pass & Eyes Up"),
+    -1 to SampleDayBaseline(12, "Corner Sightline Footwork"),
+    0 to SampleDayBaseline(0, "Ready for Today's Drill"),
   )
 
   fun buildLastSevenDayStats(
@@ -409,12 +408,11 @@ object SampleDataSource {
 
     return (-6..0).map { offset ->
       val dayTimestamp = todayMidnight + offset * dayMillis
-      val baseline = sevenDaySampleBaselines[offset] ?: SampleDayBaseline(0, 0, "Court Work")
+      val baseline = sevenDaySampleBaselines[offset] ?: SampleDayBaseline(0, "Court Work")
       val liveEntries = nonSeedReflectionsByOffset[offset].orEmpty()
-      val liveMinutes = liveEntries.sumOf { entry ->
+      val loggedMinutes = liveEntries.sumOf { entry ->
         assignmentMinutesById[entry.assignmentId] ?: 8
       }
-      val liveReps = liveEntries.size * 12
       val liveTitle = liveEntries.firstOrNull()?.drillTitle
 
       val dayLabel = if (offset == 0) {
@@ -428,8 +426,8 @@ object SampleDataSource {
         dayOffsetFromToday = offset,
         dayLabel = dayLabel,
         fullDateLabel = fullDateLabel,
-        practiceMinutes = baseline.practiceMinutes + liveMinutes,
-        focusReps = baseline.focusReps + liveReps,
+        practiceMinutes = loggedMinutes,
+        samplePreviewMinutes = if (liveEntries.isEmpty()) baseline.sampleMinutes else 0,
         focusTag = liveTitle ?: baseline.focusTag,
         hasLiveSubmission = liveEntries.isNotEmpty(),
       )

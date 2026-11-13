@@ -203,22 +203,19 @@ data class ParentConsentState(
   val acknowledgedAtMillis: Long = 0L,
 )
 
-enum class DevelopmentMetric(val label: String, val unit: String) {
-  PRACTICE_MINUTES("Practice Min", "min"),
-  FOCUS_REPS("Focus Reps", "reps"),
-}
-
 data class DailyDevelopmentStat(
   val dayOffsetFromToday: Int,
   val dayLabel: String,
   val fullDateLabel: String,
   val practiceMinutes: Int,
-  val focusReps: Int,
+  val samplePreviewMinutes: Int = 0,
   val focusTag: String,
   val hasLiveSubmission: Boolean = false,
 ) {
-  fun valueFor(metric: DevelopmentMetric): Int = when (metric) {
-    DevelopmentMetric.PRACTICE_MINUTES -> practiceMinutes
-    DevelopmentMetric.FOCUS_REPS -> focusReps
-  }
+  val isSampleReferenceDay: Boolean
+    get() = !hasLiveSubmission && samplePreviewMinutes > 0
+
+  val isRestDay: Boolean
+    get() = !hasLiveSubmission && samplePreviewMinutes == 0
 }
+

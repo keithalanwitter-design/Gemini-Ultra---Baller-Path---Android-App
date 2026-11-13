@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -42,6 +41,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -77,7 +77,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.R
-import com.example.data.sample.SampleDataSource
 import com.example.ui.theme.BurntOrange
 import com.example.ui.theme.BurntOrangeDark
 import com.example.ui.theme.NavyDeep
@@ -87,17 +86,38 @@ import java.util.Locale
 import kotlinx.coroutines.delay
 
 /**
- * Helper that manages optional hardware MediaRecorder + SpeechRecognizer + MediaPlayer + TextToSpeech
- * with safe fallbacks when running on emulators without microphone hardware or in JVM tests.
+ * Checks whether strictly on-device speech recognition is available on this device (Android 12+).
+ * Never falls back to a cloud-backed SpeechRecognizer.
  */
-private class OnDeviceVoiceController(
+private fun isOnDeviceSpeechAvailable(context: Context): Boolean = runCatching {
+  Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+    SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+}.getOrDefault(false)
+
+/**
+ * Creates a strictly on-device SpeechRecognizer when supported.
+ * Never calls SpeechRecognizer.createSpeechRecognizer(context).
+ */
+private fun createStrictOnDeviceRecognizer(context: Context): SpeechRecognizer? {
+  if (!isOnDeviceSpeechAvailable(context)) return null
+  return runCatching {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+    } else {
+      null
+    }
+  }.getOrNull()
+}
+
+/**
+ * Manages optional local voice note recording (MediaRecorder ONLY) and local playback
+ * (MediaPlayer / TextToSpeech). Never runs MediaRecorder and SpeechRecognizer at the same time.
+ */
+private class OnDeviceAudioRecorderController(
   private val context: Context,
   private val sessionKey: String,
-  private val onPartialSpeech: (String) -> Unit,
-  private val onFinalSpeech: (String) -> Unit,
 ) {
   private var mediaRecorder: MediaRecorder? = null
-  private var speechRecognizer: SpeechRecognizer? = null
   private var mediaPlayer: MediaPlayer? = null
   private var textToSpeech: TextToSpeech? = null
   private var isTtsReady = false
@@ -113,62 +133,19 @@ private class OnDeviceVoiceController(
     audioFile.exists() && audioFile.length() > 0L
   }.getOrDefault(false)
 
-  fun startHardwareCaptureIfPermitted() {
+  /**
+   * Starts hardware MediaRecorder ONLY if RECORD_AUDIO permission is granted.
+   * Returns true only if MediaRecorder actually started.
+   */
+  fun startMediaRecordingIfPermitted(): Boolean {
     val hasMicPermission = ContextCompat.checkSelfPermission(
       context,
       Manifest.permission.RECORD_AUDIO,
     ) == PackageManager.PERMISSION_GRANTED
-    if (!hasMicPermission) return
+    if (!hasMicPermission) return false
 
-    // 1. Start on-device SpeechRecognizer if available
-    runCatching {
-      if (SpeechRecognizer.isRecognitionAvailable(context)) {
-        speechRecognizer?.destroy()
-        val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
-        recognizer.setRecognitionListener(
-          object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) = Unit
-            override fun onBeginningOfSpeech() = Unit
-            override fun onRmsChanged(rmsdB: Float) = Unit
-            override fun onBufferReceived(buffer: ByteArray?) = Unit
-            override fun onEndOfSpeech() = Unit
-            override fun onError(error: Int) = Unit
-            override fun onEvent(eventType: Int, params: Bundle?) = Unit
-
-            override fun onPartialResults(partialResults: Bundle?) {
-              val matches = partialResults
-                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                ?.firstOrNull()
-                ?.trim()
-              if (!matches.isNullOrEmpty()) {
-                onPartialSpeech(matches)
-              }
-            }
-
-            override fun onResults(results: Bundle?) {
-              val matches = results
-                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                ?.firstOrNull()
-                ?.trim()
-              if (!matches.isNullOrEmpty()) {
-                onFinalSpeech(matches)
-              }
-            }
-          }
-        )
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-          putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-          putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-          putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-        }
-        recognizer.startListening(intent)
-        speechRecognizer = recognizer
-      }
-    }
-
-    // 2. Start MediaRecorder to persist voice journal audio locally if mic is free
-    runCatching {
-      stopMediaRecorder()
+    stopMediaRecorder()
+    return runCatching {
       val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         MediaRecorder(context)
       } else {
@@ -182,19 +159,14 @@ private class OnDeviceVoiceController(
       recorder.prepare()
       recorder.start()
       mediaRecorder = recorder
+      true
+    }.getOrElse {
+      stopMediaRecorder()
+      false
     }
   }
 
-  fun stopHardwareCapture() {
-    runCatching {
-      speechRecognizer?.stopListening()
-      speechRecognizer?.destroy()
-    }
-    speechRecognizer = null
-    stopMediaRecorder()
-  }
-
-  private fun stopMediaRecorder() {
+  fun stopMediaRecorder() {
     runCatching {
       mediaRecorder?.apply {
         stop()
@@ -204,7 +176,7 @@ private class OnDeviceVoiceController(
     mediaRecorder = null
   }
 
-  fun startPlayback(textToReadFallback: String, onFinished: () -> Unit) {
+  fun startPlayback(textToReadFallback: String, onFinished: () -> Unit): Boolean {
     stopPlayback()
     if (hasRecordedFile()) {
       val started = runCatching {
@@ -217,14 +189,17 @@ private class OnDeviceVoiceController(
         mediaPlayer = player
         true
       }.getOrDefault(false)
-      if (started) return
+      if (started) return true
     }
 
-    // Fallback to on-device TextToSpeech so voice notes and coach notes can always be heard aloud
-    speakTextAloud(textToReadFallback)
+    if (textToReadFallback.isNotBlank()) {
+      speakTextAloud(textToReadFallback)
+      return true
+    }
+    return false
   }
 
-  fun speakTextAloud(text: String) {
+  private fun speakTextAloud(text: String) {
     if (text.isBlank()) return
     runCatching {
       if (textToSpeech == null) {
@@ -264,7 +239,7 @@ private class OnDeviceVoiceController(
   }
 
   fun releaseAll() {
-    stopHardwareCapture()
+    stopMediaRecorder()
     stopPlayback()
     runCatching {
       textToSpeech?.shutdown()
@@ -274,16 +249,104 @@ private class OnDeviceVoiceController(
 }
 
 /**
- * Player Voice Journal & Voice-to-Text Recorder Card used in PracticeFlowScreen (Reflection stage).
+ * In-app pre-permission explanation shown BEFORE launching the system RECORD_AUDIO dialog.
+ * Explains that the microphone is optional, only for the player's reflection or a voice note,
+ * and recordings stay on this device.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun MicPermissionRationaleCard(
+  onContinueToSystemDialog: () -> Unit,
+  onCancel: () -> Unit,
+  modifier: Modifier = Modifier,
+  cardTestTag: String = "mic_rationale_card",
+  continueButtonTestTag: String = "mic_rationale_continue_button",
+  cancelButtonTestTag: String = "mic_rationale_cancel_button",
+) {
+  Surface(
+    modifier = modifier
+      .fillMaxWidth()
+      .semantics(mergeDescendants = true) {}
+      .testTag(cardTestTag),
+    shape = MaterialTheme.shapes.medium,
+    color = MaterialTheme.colorScheme.secondaryContainer,
+    border = BorderStroke(1.dp, BurntOrange),
+  ) {
+    Column(
+      modifier = Modifier.padding(14.dp),
+      verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        Icon(
+          imageVector = Icons.Outlined.Info,
+          contentDescription = null,
+          tint = BurntOrange,
+          modifier = Modifier.size(18.dp),
+        )
+        Text(
+          text = stringResource(R.string.mic_rationale_title),
+          style = MaterialTheme.typography.titleSmall,
+          color = MaterialTheme.colorScheme.onSecondaryContainer,
+          fontWeight = FontWeight.Bold,
+        )
+      }
+      Text(
+        text = stringResource(R.string.mic_rationale_body),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSecondaryContainer,
+      )
+      FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        Button(
+          onClick = onContinueToSystemDialog,
+          modifier = Modifier
+            .defaultMinSize(minHeight = 48.dp)
+            .testTag(continueButtonTestTag),
+          shape = RoundedCornerShape(10.dp),
+          colors = ButtonDefaults.buttonColors(
+            containerColor = BurntOrange,
+            contentColor = Color.White,
+          ),
+        ) {
+          Text(
+            text = stringResource(R.string.mic_rationale_continue),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+          )
+        }
+        OutlinedButton(
+          onClick = onCancel,
+          modifier = Modifier
+            .defaultMinSize(minHeight = 48.dp)
+            .testTag(cancelButtonTestTag),
+          shape = RoundedCornerShape(10.dp),
+          border = BorderStroke(1.dp, NavyDeep),
+        ) {
+          Text(
+            text = stringResource(R.string.mic_rationale_cancel),
+            style = MaterialTheme.typography.labelLarge,
+            color = NavyDeep,
+          )
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Player Optional On-Device Voice Note Recorder Card used in PracticeFlowScreen (Reflection stage).
+ * Uses ONLY MediaRecorder (never runs SpeechRecognizer simultaneously and never inserts canned starter text).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun VoiceRecorderStudioCard(
   sessionKey: String,
-  currentText: String,
-  defaultTranscribedText: String,
-  quickVoicePhrases: List<String>,
-  onTranscribedText: (String) -> Unit,
   modifier: Modifier = Modifier,
   cardTestTag: String = "player_voice_recorder_card",
   recordButtonTestTag: String = "player_voice_record_button",
@@ -292,19 +355,20 @@ fun VoiceRecorderStudioCard(
   statusBadgeTestTag: String = "player_voice_status_badge",
 ) {
   val context = LocalContext.current
+  val permissionDeniedText = stringResource(R.string.mic_permission_denied_message)
+  val recorderUnavailableText = "Microphone recording isn't available on this device. Please type your reflection below."
+
   var isRecording by rememberSaveable(sessionKey) { mutableStateOf(false) }
   var recordingSeconds by rememberSaveable(sessionKey) { mutableIntStateOf(0) }
   var hasVoiceClip by rememberSaveable(sessionKey) { mutableStateOf(false) }
   var isPlayingBack by rememberSaveable(sessionKey) { mutableStateOf(false) }
-  var liveRecognizedSpeech by rememberSaveable(sessionKey) { mutableStateOf("") }
-  var lastTranscribedSnippet by rememberSaveable(sessionKey) { mutableStateOf("") }
+  var showMicRationale by rememberSaveable(sessionKey) { mutableStateOf(false) }
+  var statusMessage by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
 
   val controller = remember(sessionKey) {
-    OnDeviceVoiceController(
+    OnDeviceAudioRecorderController(
       context = context,
       sessionKey = sessionKey,
-      onPartialSpeech = { partial -> liveRecognizedSpeech = partial },
-      onFinalSpeech = { finalSpeech -> liveRecognizedSpeech = finalSpeech },
     )
   }
 
@@ -314,11 +378,29 @@ fun VoiceRecorderStudioCard(
     }
   }
 
+  fun beginHardwareVoiceNoteRecording() {
+    isPlayingBack = false
+    controller.stopPlayback()
+    recordingSeconds = 0
+    val started = controller.startMediaRecordingIfPermitted()
+    if (started) {
+      isRecording = true
+      statusMessage = null
+    } else {
+      isRecording = false
+      statusMessage = recorderUnavailableText
+    }
+  }
+
   val micPermissionLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.RequestPermission(),
   ) { granted ->
-    if (granted && isRecording) {
-      controller.startHardwareCaptureIfPermitted()
+    showMicRationale = false
+    if (granted) {
+      beginHardwareVoiceNoteRecording()
+    } else {
+      isRecording = false
+      statusMessage = permissionDeniedText
     }
   }
 
@@ -338,49 +420,31 @@ fun VoiceRecorderStudioCard(
     }
   }
 
-  fun startVoiceRecording() {
-    isPlayingBack = false
-    controller.stopPlayback()
-    liveRecognizedSpeech = ""
-    recordingSeconds = 0
-    isRecording = true
+  fun onRecordButtonClicked() {
+    if (isRecording) {
+      controller.stopMediaRecorder()
+      isRecording = false
+      hasVoiceClip = controller.hasRecordedFile()
+      return
+    }
 
     val hasMicPermission = ContextCompat.checkSelfPermission(
       context,
       Manifest.permission.RECORD_AUDIO,
     ) == PackageManager.PERMISSION_GRANTED
     if (hasMicPermission) {
-      controller.startHardwareCaptureIfPermitted()
+      beginHardwareVoiceNoteRecording()
     } else {
-      runCatching {
-        micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-      }
+      isRecording = false
+      showMicRationale = true
     }
-  }
-
-  fun stopAndTranscribeVoice() {
-    controller.stopHardwareCapture()
-    isRecording = false
-    hasVoiceClip = true
-
-    val transcribedSentence = liveRecognizedSpeech.trim().ifEmpty {
-      defaultTranscribedText.trim()
-    }
-    lastTranscribedSnippet = transcribedSentence
-
-    val mergedText = when {
-      currentText.isBlank() -> transcribedSentence
-      currentText.contains(transcribedSentence, ignoreCase = true) -> currentText
-      else -> "${currentText.trimEnd().trimEnd('.')}. $transcribedSentence"
-    }
-    onTranscribedText(mergedText)
   }
 
   val statusLabel = when {
     isRecording -> "Recording ${formatVoiceSeconds(recordingSeconds)}"
     isPlayingBack -> stringResource(R.string.coach_playing_note)
-    hasVoiceClip -> "Transcribed · Audio Saved"
-    else -> "Voice Ready"
+    hasVoiceClip -> "Audio Saved on Device"
+    else -> "On-Device Audio"
   }
 
   Surface(
@@ -457,7 +521,44 @@ fun VoiceRecorderStudioCard(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
 
-      // Live Waveform Banner while Recording
+      if (showMicRationale) {
+        MicPermissionRationaleCard(
+          onContinueToSystemDialog = {
+            showMicRationale = false
+            runCatching {
+              micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }.onFailure {
+              isRecording = false
+              statusMessage = permissionDeniedText
+            }
+          },
+          onCancel = {
+            showMicRationale = false
+            isRecording = false
+          },
+          cardTestTag = "${cardTestTag}_mic_rationale",
+          continueButtonTestTag = "${cardTestTag}_mic_rationale_continue",
+          cancelButtonTestTag = "${cardTestTag}_mic_rationale_cancel",
+        )
+      }
+
+      if (statusMessage != null) {
+        Surface(
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("${cardTestTag}_status_message"),
+          shape = MaterialTheme.shapes.small,
+          color = MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+          Text(
+            text = statusMessage.orEmpty(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+          )
+        }
+      }
+
       AnimatedVisibility(visible = isRecording) {
         Surface(
           modifier = Modifier
@@ -484,11 +585,7 @@ fun VoiceRecorderStudioCard(
                   .background(BurntOrange),
               )
               Text(
-                text = if (liveRecognizedSpeech.isNotBlank()) {
-                  "\"$liveRecognizedSpeech\""
-                } else {
-                  "Listening & recording voice journal… (${formatVoiceSeconds(recordingSeconds)})"
-                },
+                text = "Recording on-device voice note… (${formatVoiceSeconds(recordingSeconds)})",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White,
               )
@@ -498,7 +595,6 @@ fun VoiceRecorderStudioCard(
         }
       }
 
-      // Primary Voice Recorder Controls Row
       FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -510,13 +606,7 @@ fun VoiceRecorderStudioCard(
           stringResource(R.string.voice_record_start)
         }
         Button(
-          onClick = {
-            if (isRecording) {
-              stopAndTranscribeVoice()
-            } else {
-              startVoiceRecording()
-            }
-          },
+          onClick = ::onRecordButtonClicked,
           modifier = Modifier
             .defaultMinSize(minHeight = 48.dp)
             .semantics {
@@ -542,7 +632,7 @@ fun VoiceRecorderStudioCard(
           )
         }
 
-        if (hasVoiceClip || currentText.isNotBlank()) {
+        if (hasVoiceClip) {
           val playLabel = if (isPlayingBack) {
             stringResource(R.string.voice_stop_playback)
           } else {
@@ -554,11 +644,10 @@ fun VoiceRecorderStudioCard(
                 controller.stopPlayback()
                 isPlayingBack = false
               } else {
-                val textToRead = currentText.ifBlank { lastTranscribedSnippet.ifBlank { defaultTranscribedText } }
-                isPlayingBack = true
-                controller.startPlayback(textToRead) {
+                val started = controller.startPlayback(textToReadFallback = "") {
                   isPlayingBack = false
                 }
+                isPlayingBack = started
               }
             },
             modifier = Modifier
@@ -583,14 +672,11 @@ fun VoiceRecorderStudioCard(
               color = NavyDeep,
             )
           }
-        }
 
-        if (hasVoiceClip) {
           OutlinedButton(
             onClick = {
               controller.deleteRecordedFile()
               hasVoiceClip = false
-              lastTranscribedSnippet = ""
               recordingSeconds = 0
             },
             modifier = Modifier
@@ -617,70 +703,14 @@ fun VoiceRecorderStudioCard(
           }
         }
       }
-
-      if (quickVoicePhrases.isNotEmpty()) {
-        Text(
-          text = "Or tap a quick voice-to-text phrase to append:",
-          style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        FlowRow(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(6.dp),
-          verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-          quickVoicePhrases.take(2).forEachIndexed { idx, phrase ->
-            Surface(
-              onClick = {
-                hasVoiceClip = true
-                lastTranscribedSnippet = phrase
-                val merged = when {
-                  currentText.isBlank() -> phrase
-                  currentText.contains(phrase, ignoreCase = true) -> currentText
-                  else -> "${currentText.trimEnd().trimEnd('.')}. $phrase"
-                }
-                onTranscribedText(merged)
-              },
-              modifier = Modifier
-                .defaultMinSize(minHeight = 48.dp)
-                .semantics(mergeDescendants = true) {
-                  contentDescription = "Insert dictated phrase: $phrase"
-                  role = Role.Button
-                }
-                .testTag("${cardTestTag}_quick_phrase_$idx"),
-              shape = RoundedCornerShape(10.dp),
-              color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
-              border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
-            ) {
-              Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-              ) {
-                Icon(
-                  imageVector = Icons.Outlined.Mic,
-                  contentDescription = null,
-                  tint = BurntOrangeDark,
-                  modifier = Modifier.size(15.dp),
-                )
-                Text(
-                  text = phrase,
-                  style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.onSurface,
-                )
-              }
-            }
-          }
-        }
-      }
     }
   }
 }
 
 /**
- * Collapsible Coach Keith Voice-to-Text & Custom Feedback Studio for Work + Feedback cards.
- * Allows Coach Keith (or a parent/tester) to record & transcribe coaching notes or type them directly,
- * and save them into Room without losing any existing reflection history.
+ * Debug-only Collapsible Coach Keith Voice-to-Text & Custom Feedback Studio for Work + Feedback cards.
+ * Uses strictly on-device speech recognition when available, never inserts canned Coach Keith paragraphs,
+ * and never auto-fills empty fields on Save.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -694,6 +724,10 @@ fun CoachFeedbackStudioSection(
   toggleButtonLabelOpen: String = stringResource(R.string.coach_studio_toggle_open),
 ) {
   val context = LocalContext.current
+  val sttUnavailableMessage = stringResource(R.string.stt_unavailable_message)
+  val sttFailedMessage = stringResource(R.string.stt_failed_message)
+  val permissionDeniedMessage = stringResource(R.string.mic_permission_denied_message)
+
   var isExpanded by rememberSaveable(assignmentId) { mutableStateOf(false) }
   var coachResponseDraft by rememberSaveable(assignmentId, initialCoachResponse) {
     mutableStateOf(initialCoachResponse)
@@ -701,64 +735,128 @@ fun CoachFeedbackStudioSection(
   var nextRepDraft by rememberSaveable(assignmentId, initialNextAdjustment) {
     mutableStateOf(initialNextAdjustment)
   }
-  var isRecordingCoachVoice by rememberSaveable(assignmentId) { mutableStateOf(false) }
-  var coachRecordingSeconds by rememberSaveable(assignmentId) { mutableIntStateOf(0) }
-  var hasRecordedCoachClip by rememberSaveable(assignmentId) { mutableStateOf(false) }
-  var isPlayingCoachClip by rememberSaveable(assignmentId) { mutableStateOf(false) }
-  var liveCoachSpeech by rememberSaveable(assignmentId) { mutableStateOf("") }
+  var isDictatingCoachVoice by rememberSaveable(assignmentId) { mutableStateOf(false) }
+  var coachDictationSeconds by rememberSaveable(assignmentId) { mutableIntStateOf(0) }
+  var showMicRationale by rememberSaveable(assignmentId) { mutableStateOf(false) }
+  var statusMessage by rememberSaveable(assignmentId) { mutableStateOf<String?>(null) }
+  var validationError by rememberSaveable(assignmentId) { mutableStateOf<String?>(null) }
+  var speechRecognizerRef by remember { mutableStateOf<SpeechRecognizer?>(null) }
 
-  val controller = remember(assignmentId) {
-    OnDeviceVoiceController(
-      context = context,
-      sessionKey = "coach_$assignmentId",
-      onPartialSpeech = { partial -> liveCoachSpeech = partial },
-      onFinalSpeech = { finalSpeech -> liveCoachSpeech = finalSpeech },
-    )
+  fun stopCoachRecognizer() {
+    runCatching {
+      speechRecognizerRef?.stopListening()
+      speechRecognizerRef?.destroy()
+    }
+    speechRecognizerRef = null
+    isDictatingCoachVoice = false
   }
 
-  DisposableEffect(controller) {
+  DisposableEffect(assignmentId) {
     onDispose {
-      controller.releaseAll()
+      stopCoachRecognizer()
+    }
+  }
+
+  fun startStrictOnDeviceCoachDictation() {
+    if (!isOnDeviceSpeechAvailable(context)) {
+      isDictatingCoachVoice = false
+      statusMessage = sttUnavailableMessage
+      return
+    }
+    val baseText = coachResponseDraft
+    val started = runCatching {
+      speechRecognizerRef?.destroy()
+      val recognizer = createStrictOnDeviceRecognizer(context) ?: return@runCatching false
+      recognizer.setRecognitionListener(
+        object : RecognitionListener {
+          override fun onReadyForSpeech(params: Bundle?) = Unit
+          override fun onBeginningOfSpeech() = Unit
+          override fun onRmsChanged(rmsdB: Float) = Unit
+          override fun onBufferReceived(buffer: ByteArray?) = Unit
+          override fun onEndOfSpeech() {
+            isDictatingCoachVoice = false
+          }
+
+          override fun onError(error: Int) {
+            isDictatingCoachVoice = false
+            statusMessage = sttFailedMessage
+          }
+
+          override fun onResults(results: Bundle?) {
+            val spoken = results
+              ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+              ?.firstOrNull()
+              ?.trim()
+              .orEmpty()
+            if (spoken.isNotEmpty()) {
+              coachResponseDraft = if (baseText.isBlank()) {
+                spoken
+              } else {
+                "${baseText.trimEnd().trimEnd('.')}. $spoken"
+              }
+              validationError = null
+            } else {
+              statusMessage = sttFailedMessage
+            }
+            isDictatingCoachVoice = false
+          }
+
+          override fun onPartialResults(partialResults: Bundle?) {
+            val partial = partialResults
+              ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+              ?.firstOrNull()
+              ?.trim()
+              .orEmpty()
+            if (partial.isNotEmpty()) {
+              coachResponseDraft = if (baseText.isBlank()) {
+                partial
+              } else {
+                "${baseText.trimEnd().trimEnd('.')}. $partial"
+              }
+            }
+          }
+
+          override fun onEvent(eventType: Int, params: Bundle?) = Unit
+        }
+      )
+      val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+        putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+      }
+      recognizer.startListening(intent)
+      speechRecognizerRef = recognizer
+      true
+    }.getOrDefault(false)
+
+    if (started) {
+      coachDictationSeconds = 0
+      isDictatingCoachVoice = true
+      statusMessage = null
+    } else {
+      isDictatingCoachVoice = false
+      statusMessage = sttUnavailableMessage
     }
   }
 
   val micPermissionLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.RequestPermission(),
   ) { granted ->
-    if (granted && isRecordingCoachVoice) {
-      controller.startHardwareCaptureIfPermitted()
+    showMicRationale = false
+    if (granted) {
+      startStrictOnDeviceCoachDictation()
+    } else {
+      isDictatingCoachVoice = false
+      statusMessage = permissionDeniedMessage
     }
   }
 
-  LaunchedEffect(isRecordingCoachVoice) {
-    if (isRecordingCoachVoice) {
-      while (isRecordingCoachVoice) {
+  LaunchedEffect(isDictatingCoachVoice) {
+    if (isDictatingCoachVoice) {
+      while (isDictatingCoachVoice) {
         delay(1_000L)
-        coachRecordingSeconds += 1
-      }
-    }
-  }
-
-  LaunchedEffect(isPlayingCoachClip) {
-    if (isPlayingCoachClip) {
-      delay(2_500L)
-      isPlayingCoachClip = false
-    }
-  }
-
-  val (defaultCoachNote, defaultNextRep) = remember(assignmentId) {
-    when (assignmentId) {
-      SampleDataSource.ASSIGNMENT_CORNER_RELOCATION -> {
-        "Voice note from Coach Keith: You read the help defender's chest early and slid cleanly into the corner passing window." to
-          "Next rep, hold your corner balance for one full count before lifting to the wing."
-      }
-      SampleDataSource.ASSIGNMENT_GENERAL_RHYTHM -> {
-        "Voice note from Coach Keith: Great handle rhythm with your chin up scanning the opposite rim." to
-          "Next rep, call out an open corner teammate immediately after each crossover."
-      }
-      else -> {
-        "Voice note from Coach Keith: You spotted the drive right after the pass and held wide spacing so your teammate had a clean lane." to
-          "Walk through two reps and call out what the help defender does before you cut or space."
+        coachDictationSeconds += 1
       }
     }
   }
@@ -835,7 +933,45 @@ fun CoachFeedbackStudioSection(
             }
           }
 
-          if (isRecordingCoachVoice) {
+          if (showMicRationale) {
+            MicPermissionRationaleCard(
+              onContinueToSystemDialog = {
+                showMicRationale = false
+                runCatching {
+                  micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }.onFailure {
+                  isDictatingCoachVoice = false
+                  statusMessage = permissionDeniedMessage
+                }
+              },
+              onCancel = {
+                showMicRationale = false
+                isDictatingCoachVoice = false
+              },
+              cardTestTag = "coach_mic_rationale_$assignmentId",
+              continueButtonTestTag = "coach_mic_rationale_continue_$assignmentId",
+              cancelButtonTestTag = "coach_mic_rationale_cancel_$assignmentId",
+            )
+          }
+
+          if (statusMessage != null) {
+            Surface(
+              modifier = Modifier
+                .fillMaxWidth()
+                .testTag("coach_voice_status_$assignmentId"),
+              shape = MaterialTheme.shapes.small,
+              color = MaterialTheme.colorScheme.surface,
+            ) {
+              Text(
+                text = statusMessage.orEmpty(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+              )
+            }
+          }
+
+          if (isDictatingCoachVoice) {
             Surface(
               modifier = Modifier
                 .fillMaxWidth()
@@ -851,15 +987,11 @@ fun CoachFeedbackStudioSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
               ) {
                 Text(
-                  text = if (liveCoachSpeech.isNotBlank()) {
-                    "\"$liveCoachSpeech\""
-                  } else {
-                    "Recording Coach Keith voice note… (${formatVoiceSeconds(coachRecordingSeconds)})"
-                  },
+                  text = "Listening on device… (${formatVoiceSeconds(coachDictationSeconds)})",
                   style = MaterialTheme.typography.bodySmall,
                   color = Color.White,
                 )
-                VoiceWaveformIndicator(activeTick = coachRecordingSeconds)
+                VoiceWaveformIndicator(activeTick = coachDictationSeconds)
               }
             }
           }
@@ -869,38 +1001,25 @@ fun CoachFeedbackStudioSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
           ) {
-            val coachRecordLabel = if (isRecordingCoachVoice) {
-              "Stop & Transcribe Coach Note"
+            val coachRecordLabel = if (isDictatingCoachVoice) {
+              "Stop On-Device Dictation"
             } else {
               "Dictate Coach Note"
             }
             Button(
               onClick = {
-                if (isRecordingCoachVoice) {
-                  controller.stopHardwareCapture()
-                  isRecordingCoachVoice = false
-                  hasRecordedCoachClip = true
-                  val spoken = liveCoachSpeech.trim().ifEmpty { defaultCoachNote }
-                  coachResponseDraft = spoken
-                  if (nextRepDraft.isBlank() || nextRepDraft == initialNextAdjustment) {
-                    nextRepDraft = defaultNextRep
-                  }
+                if (isDictatingCoachVoice) {
+                  stopCoachRecognizer()
                 } else {
-                  isPlayingCoachClip = false
-                  controller.stopPlayback()
-                  liveCoachSpeech = ""
-                  coachRecordingSeconds = 0
-                  isRecordingCoachVoice = true
                   val hasMicPerm = ContextCompat.checkSelfPermission(
                     context,
                     Manifest.permission.RECORD_AUDIO,
                   ) == PackageManager.PERMISSION_GRANTED
                   if (hasMicPerm) {
-                    controller.startHardwareCaptureIfPermitted()
+                    startStrictOnDeviceCoachDictation()
                   } else {
-                    runCatching {
-                      micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                    }
+                    isDictatingCoachVoice = false
+                    showMicRationale = true
                   }
                 }
               },
@@ -912,12 +1031,12 @@ fun CoachFeedbackStudioSection(
                 .testTag("coach_voice_record_$assignmentId"),
               shape = RoundedCornerShape(12.dp),
               colors = ButtonDefaults.buttonColors(
-                containerColor = if (isRecordingCoachVoice) NavyDeep else BurntOrange,
+                containerColor = if (isDictatingCoachVoice) NavyDeep else BurntOrange,
                 contentColor = Color.White,
               ),
             ) {
               Icon(
-                imageVector = if (isRecordingCoachVoice) Icons.Filled.Stop else Icons.Filled.Mic,
+                imageVector = if (isDictatingCoachVoice) Icons.Filled.Stop else Icons.Filled.Mic,
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
               )
@@ -928,58 +1047,20 @@ fun CoachFeedbackStudioSection(
                 fontWeight = FontWeight.Bold,
               )
             }
-
-            if (hasRecordedCoachClip || coachResponseDraft.isNotBlank()) {
-              OutlinedButton(
-                onClick = {
-                  if (isPlayingCoachClip) {
-                    controller.stopPlayback()
-                    isPlayingCoachClip = false
-                  } else {
-                    isPlayingCoachClip = true
-                    controller.startPlayback("$coachResponseDraft. $nextRepDraft") {
-                      isPlayingCoachClip = false
-                    }
-                  }
-                },
-                modifier = Modifier
-                  .defaultMinSize(minHeight = 48.dp)
-                  .semantics {
-                    contentDescription = if (isPlayingCoachClip) {
-                      "Stop Coach Keith voice playback"
-                    } else {
-                      "Play Coach Keith voice note"
-                    }
-                  }
-                  .testTag("coach_voice_play_$assignmentId"),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, NavyDeep),
-              ) {
-                Icon(
-                  imageVector = if (isPlayingCoachClip) Icons.Filled.Stop else Icons.Filled.PlayArrow,
-                  contentDescription = null,
-                  tint = NavyDeep,
-                  modifier = Modifier.size(18.dp),
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                  text = if (isPlayingCoachClip) "Stop" else "Play Note",
-                  style = MaterialTheme.typography.labelLarge,
-                  color = NavyDeep,
-                )
-              }
-            }
           }
 
           HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
 
           OutlinedTextField(
             value = coachResponseDraft,
-            onValueChange = { coachResponseDraft = it },
+            onValueChange = {
+              coachResponseDraft = it
+              validationError = null
+            },
             modifier = Modifier
               .fillMaxWidth()
               .testTag("coach_response_input_$assignmentId"),
-              label = { Text("Coach Keith's Feedback (Voice-to-Text or Typed)") },
+            label = { Text("Coach Keith's Feedback (Debug Only)") },
             minLines = 2,
             maxLines = 5,
             colors = OutlinedTextFieldDefaults.colors(
@@ -994,11 +1075,14 @@ fun CoachFeedbackStudioSection(
 
           OutlinedTextField(
             value = nextRepDraft,
-            onValueChange = { nextRepDraft = it },
+            onValueChange = {
+              nextRepDraft = it
+              validationError = null
+            },
             modifier = Modifier
               .fillMaxWidth()
               .testTag("coach_next_rep_input_$assignmentId"),
-            label = { Text("Try the next rep (Voice-to-Text or Typed)") },
+            label = { Text("Try the next rep (Debug Only)") },
             minLines = 2,
             maxLines = 4,
             colors = OutlinedTextFieldDefaults.colors(
@@ -1011,12 +1095,26 @@ fun CoachFeedbackStudioSection(
             shape = MaterialTheme.shapes.small,
           )
 
+          if (validationError != null) {
+            Text(
+              text = validationError.orEmpty(),
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.error,
+              modifier = Modifier.testTag("coach_studio_validation_error_$assignmentId"),
+            )
+          }
+
           Button(
             onClick = {
-              val finalResponse = coachResponseDraft.trim().ifEmpty { defaultCoachNote }
-              val finalNextRep = nextRepDraft.trim().ifEmpty { defaultNextRep }
-              onSaveCoachFeedback(finalResponse, finalNextRep)
-              isExpanded = false
+              val finalResponse = coachResponseDraft.trim()
+              val finalNextRep = nextRepDraft.trim()
+              if (finalResponse.isEmpty() || finalNextRep.isEmpty()) {
+                validationError = "Enter both Coach Keith's feedback and the Try the next rep note before saving."
+              } else {
+                validationError = null
+                onSaveCoachFeedback(finalResponse, finalNextRep)
+                isExpanded = false
+              }
             },
             modifier = Modifier
               .fillMaxWidth()
@@ -1063,11 +1161,9 @@ fun CoachAudioListenButton(
   var isSpeaking by rememberSaveable(sessionKey) { mutableStateOf(false) }
 
   val controller = remember(sessionKey) {
-    OnDeviceVoiceController(
+    OnDeviceAudioRecorderController(
       context = context,
       sessionKey = sessionKey,
-      onPartialSpeech = {},
-      onFinalSpeech = {},
     )
   }
 
@@ -1168,23 +1264,28 @@ private fun formatVoiceSeconds(totalSeconds: Int): String {
 }
 
 /**
- * Microphone IconButton integrated directly into the Reflection OutlinedTextField.
- * Uses Android's SpeechRecognizer + RecognizerIntent.ACTION_RECOGNIZE_SPEECH API
- * (with runtime RECORD_AUDIO permission request and offline/emulator fallback)
- * to transcribe the player's thoughts directly into the text input field.
+ * Microphone IconButton integrated into the Reflection OutlinedTextField.
+ * Uses strictly on-device SpeechRecognizer (createOnDeviceSpeechRecognizer) when available.
+ * Never falls back to a cloud recognizer and never inserts canned starter text on failure/unavailability/denial.
  */
 @Composable
 fun ReflectionSpeechToTextMicButton(
   sessionKey: String,
   promptText: String,
   currentText: String,
-  defaultTranscribedText: String,
   onTranscribedText: (String) -> Unit,
   onListeningChanged: (Boolean) -> Unit = {},
+  onRequestRationaleChanged: (Boolean) -> Unit = {},
+  onStatusMessageChanged: (String?) -> Unit = {},
+  permissionRequestTrigger: Int = 0,
   modifier: Modifier = Modifier,
   testTag: String = "reflection_mic_button",
 ) {
   val context = LocalContext.current
+  val sttUnavailableMessage = stringResource(R.string.stt_unavailable_message)
+  val sttFailedMessage = stringResource(R.string.stt_failed_message)
+  val permissionDeniedMessage = stringResource(R.string.mic_permission_denied_message)
+
   var isListening by rememberSaveable(sessionKey) { mutableStateOf(false) }
   var baseTextBeforeListening by rememberSaveable(sessionKey) { mutableStateOf("") }
   var speechRecognizerRef by remember { mutableStateOf<SpeechRecognizer?>(null) }
@@ -1209,97 +1310,113 @@ fun ReflectionSpeechToTextMicButton(
     onListeningChanged(false)
   }
 
-  fun startAndroidSpeechRecognizer(initialBaseText: String) {
-    val recognitionAvailable = runCatching {
-      SpeechRecognizer.isRecognitionAvailable(context)
-    }.getOrDefault(false)
+  fun startOnDeviceSpeechRecognizer(initialBaseText: String) {
+    if (!isOnDeviceSpeechAvailable(context)) {
+      stopRecognizer()
+      onStatusMessageChanged(sttUnavailableMessage)
+      return
+    }
 
     val sttIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
       putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
       putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
       putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+      putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
       putExtra(RecognizerIntent.EXTRA_PROMPT, promptText)
     }
 
-    val startedLiveRecognizer = if (recognitionAvailable) {
-      runCatching {
-        speechRecognizerRef?.destroy()
-        val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
-        recognizer.setRecognitionListener(
-          object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) = Unit
-            override fun onBeginningOfSpeech() = Unit
-            override fun onRmsChanged(rmsdB: Float) = Unit
-            override fun onBufferReceived(buffer: ByteArray?) = Unit
-            override fun onEndOfSpeech() {
-              isListening = false
-              onListeningChanged(false)
-            }
-
-            override fun onError(error: Int) {
-              // If live SpeechRecognizer encounters a service/mic error, ensure thought is transcribed
-              if (currentText.isBlank()) {
-                onTranscribedText(mergeTranscript(initialBaseText, defaultTranscribedText))
-              }
-              isListening = false
-              onListeningChanged(false)
-            }
-
-            override fun onResults(results: Bundle?) {
-              val spoken = results
-                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                ?.firstOrNull()
-                ?.trim()
-                .orEmpty()
-              val finalSpoken = spoken.ifEmpty { defaultTranscribedText }
-              onTranscribedText(mergeTranscript(initialBaseText, finalSpoken))
-              isListening = false
-              onListeningChanged(false)
-            }
-
-            override fun onPartialResults(partialResults: Bundle?) {
-              val partial = partialResults
-                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                ?.firstOrNull()
-                ?.trim()
-                .orEmpty()
-              if (partial.isNotEmpty()) {
-                onTranscribedText(mergeTranscript(initialBaseText, partial))
-              }
-            }
-
-            override fun onEvent(eventType: Int, params: Bundle?) = Unit
+    val startedLiveRecognizer = runCatching {
+      speechRecognizerRef?.destroy()
+      val recognizer = createStrictOnDeviceRecognizer(context) ?: return@runCatching false
+      recognizer.setRecognitionListener(
+        object : RecognitionListener {
+          override fun onReadyForSpeech(params: Bundle?) = Unit
+          override fun onBeginningOfSpeech() = Unit
+          override fun onRmsChanged(rmsdB: Float) = Unit
+          override fun onBufferReceived(buffer: ByteArray?) = Unit
+          override fun onEndOfSpeech() {
+            isListening = false
+            onListeningChanged(false)
           }
-        )
-        recognizer.startListening(sttIntent)
-        speechRecognizerRef = recognizer
-        true
-      }.getOrDefault(false)
-    } else {
-      false
-    }
 
-    // If running in an emulator or test environment without an active SpeechRecognizer service,
-    // immediately transcribe into the text field so tapping the microphone icon always works seamlessly.
-    if (!startedLiveRecognizer) {
-      onTranscribedText(mergeTranscript(initialBaseText, defaultTranscribedText))
+          override fun onError(error: Int) {
+            isListening = false
+            onListeningChanged(false)
+            onStatusMessageChanged(sttFailedMessage)
+          }
+
+          override fun onResults(results: Bundle?) {
+            val spoken = results
+              ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+              ?.firstOrNull()
+              ?.trim()
+              .orEmpty()
+            if (spoken.isNotEmpty()) {
+              onTranscribedText(mergeTranscript(initialBaseText, spoken))
+              onStatusMessageChanged(null)
+            } else {
+              onStatusMessageChanged(sttFailedMessage)
+            }
+            isListening = false
+            onListeningChanged(false)
+          }
+
+          override fun onPartialResults(partialResults: Bundle?) {
+            val partial = partialResults
+              ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+              ?.firstOrNull()
+              ?.trim()
+              .orEmpty()
+            if (partial.isNotEmpty()) {
+              onTranscribedText(mergeTranscript(initialBaseText, partial))
+            }
+          }
+
+          override fun onEvent(eventType: Int, params: Bundle?) = Unit
+        }
+      )
+      recognizer.startListening(sttIntent)
+      speechRecognizerRef = recognizer
+      true
+    }.getOrDefault(false)
+
+    if (startedLiveRecognizer) {
+      isListening = true
+      onListeningChanged(true)
+      onStatusMessageChanged(null)
+    } else {
+      stopRecognizer()
+      onStatusMessageChanged(sttUnavailableMessage)
     }
   }
 
   DisposableEffect(sessionKey) {
     onDispose {
-      runCatching {
-        speechRecognizerRef?.destroy()
-      }
-      speechRecognizerRef = null
+      stopRecognizer()
     }
   }
 
   val permissionLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.RequestPermission(),
   ) { granted ->
-    if (granted && isListening) {
-      startAndroidSpeechRecognizer(baseTextBeforeListening)
+    onRequestRationaleChanged(false)
+    if (granted) {
+      baseTextBeforeListening = currentText
+      startOnDeviceSpeechRecognizer(baseTextBeforeListening)
+    } else {
+      stopRecognizer()
+      onStatusMessageChanged(permissionDeniedMessage)
+    }
+  }
+
+  LaunchedEffect(permissionRequestTrigger) {
+    if (permissionRequestTrigger > 0) {
+      runCatching {
+        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+      }.onFailure {
+        stopRecognizer()
+        onStatusMessageChanged(permissionDeniedMessage)
+      }
     }
   }
 
@@ -1310,26 +1427,18 @@ fun ReflectionSpeechToTextMicButton(
     onClick = {
       if (isListening) {
         stopRecognizer()
-        if (currentText.isBlank()) {
-          onTranscribedText(mergeTranscript(baseTextBeforeListening, defaultTranscribedText))
-        }
       } else {
-        baseTextBeforeListening = currentText
-        isListening = true
-        onListeningChanged(true)
         val hasMicPerm = ContextCompat.checkSelfPermission(
           context,
           Manifest.permission.RECORD_AUDIO,
         ) == PackageManager.PERMISSION_GRANTED
         if (hasMicPerm) {
-          startAndroidSpeechRecognizer(baseTextBeforeListening)
+          baseTextBeforeListening = currentText
+          startOnDeviceSpeechRecognizer(baseTextBeforeListening)
         } else {
-          // Transcribe fallback immediately in case system permission dialog cannot be shown in headless test,
-          // and request runtime RECORD_AUDIO permission for live hardware microphone capture.
-          onTranscribedText(mergeTranscript(baseTextBeforeListening, defaultTranscribedText))
-          runCatching {
-            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-          }
+          stopRecognizer()
+          onStatusMessageChanged(null)
+          onRequestRationaleChanged(true)
         }
       }
     },
@@ -1358,4 +1467,3 @@ fun ReflectionSpeechToTextMicButton(
     }
   }
 }
-

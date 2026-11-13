@@ -505,11 +505,6 @@ fun PracticeFlowScreen(
 
           VoiceRecorderStudioCard(
             sessionKey = "player_${assignment.assignmentId}",
-            currentText = practice.reflectionDraft,
-            defaultTranscribedText = assignment.starterCues.firstOrNull()
-              ?: "My teammate started to drive, so I stayed wide to give them room.",
-            quickVoicePhrases = assignment.starterCues.drop(1),
-            onTranscribedText = onReflectionChanged,
           )
 
           Text(
@@ -548,6 +543,43 @@ fun PracticeFlowScreen(
           }
 
           var isFieldSttListening by remember(assignment.assignmentId) { mutableStateOf(false) }
+          var showFieldMicRationale by remember(assignment.assignmentId) { mutableStateOf(false) }
+          var fieldSttStatusMessage by remember(assignment.assignmentId) { mutableStateOf<String?>(null) }
+          var fieldPermTrigger by remember(assignment.assignmentId) { mutableStateOf(0) }
+
+          if (showFieldMicRationale) {
+            com.example.ui.components.MicPermissionRationaleCard(
+              onContinueToSystemDialog = {
+                showFieldMicRationale = false
+                fieldPermTrigger += 1
+              },
+              onCancel = {
+                showFieldMicRationale = false
+                isFieldSttListening = false
+              },
+              cardTestTag = "reflection_mic_rationale_card",
+              continueButtonTestTag = "reflection_mic_rationale_continue",
+              cancelButtonTestTag = "reflection_mic_rationale_cancel",
+            )
+          }
+
+          if (fieldSttStatusMessage != null) {
+            Surface(
+              modifier = Modifier
+                .fillMaxWidth()
+                .semantics(mergeDescendants = true) {}
+                .testTag("reflection_stt_status_banner"),
+              shape = MaterialTheme.shapes.small,
+              color = MaterialTheme.colorScheme.secondaryContainer,
+            ) {
+              Text(
+                text = fieldSttStatusMessage.orEmpty(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+              )
+            }
+          }
 
           if (isFieldSttListening) {
             Surface(
@@ -582,10 +614,11 @@ fun PracticeFlowScreen(
                 sessionKey = "field_stt_${assignment.assignmentId}",
                 promptText = assignment.reflectionPrompt,
                 currentText = practice.reflectionDraft,
-                defaultTranscribedText = assignment.starterCues.firstOrNull()
-                  ?: "My teammate started to drive, so I stayed wide to give them room.",
                 onTranscribedText = onReflectionChanged,
                 onListeningChanged = { isFieldSttListening = it },
+                onRequestRationaleChanged = { showFieldMicRationale = it },
+                onStatusMessageChanged = { fieldSttStatusMessage = it },
+                permissionRequestTrigger = fieldPermTrigger,
               )
             },
             textStyle = MaterialTheme.typography.bodyLarge,
