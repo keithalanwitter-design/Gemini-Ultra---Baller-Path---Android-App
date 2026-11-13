@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -46,6 +47,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
@@ -97,11 +100,11 @@ fun WorkFeedbackScreen(
       modifier = Modifier
         .widthIn(max = 720.dp)
         .fillMaxSize()
-        .padding(horizontal = 16.dp),
+        .testTag("work_feedback_list"),
+      contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 32.dp),
       verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
       item {
-        Spacer(modifier = Modifier.height(10.dp))
         PlayerHeaderBar(
           playerName = uiState.player.displayName,
           jerseyAndPosition = "${uiState.player.position} · ${uiState.player.grade}",
@@ -277,7 +280,7 @@ fun WorkFeedbackScreen(
       }
 
       item {
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
       }
     }
   }
@@ -295,6 +298,9 @@ private fun WorkTabPill(
     onClick = onClick,
     modifier = Modifier
       .defaultMinSize(minHeight = 48.dp)
+      .semantics(mergeDescendants = true) {
+        contentDescription = "$label filter tab, $count items${if (selected) ", selected" else ""}"
+      }
       .testTag(testTag),
     shape = RoundedCornerShape(14.dp),
     color = if (selected) NavyDeep else MaterialTheme.colorScheme.surface,
@@ -434,11 +440,15 @@ private fun TodoAssignmentCard(
         }
       }
 
+      val buttonAction = if (hasDraft) "Resume" else "Start"
       Button(
         onClick = onStartOrResume,
         modifier = Modifier
           .fillMaxWidth()
           .defaultMinSize(minHeight = 48.dp)
+          .semantics {
+            contentDescription = "$buttonAction ${assignment.title}"
+          }
           .testTag("todo_action_${assignment.assignmentId}"),
         colors = ButtonDefaults.buttonColors(
           containerColor = BurntOrange,
@@ -574,6 +584,9 @@ private fun AwaitingCoachAssignmentCard(
               modifier = Modifier
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = 48.dp)
+                .semantics {
+                  contentDescription = "Demo: Reveal sample Coach Keith response for ${workItem.assignment.title}"
+                }
                 .testTag("reveal_feedback_${workItem.assignment.assignmentId}"),
               shape = RoundedCornerShape(12.dp),
               border = BorderStroke(1.5.dp, BurntOrange),

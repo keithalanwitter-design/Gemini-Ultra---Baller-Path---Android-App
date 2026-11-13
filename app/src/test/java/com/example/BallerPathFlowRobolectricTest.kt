@@ -50,17 +50,23 @@ class BallerPathFlowRobolectricTest {
   fun resetDemoDatabase() = runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val db = BallerPathDatabase.getInstance(context)
-    LocalBallerPathRepository(
+    val repo = LocalBallerPathRepository(
       reflectionDao = db.reflectionDao(),
       practiceDraftDao = db.practiceDraftDao(),
       assignmentDao = db.assignmentDao(),
       setupStateDao = db.setupStateDao(),
-    ).resetDemoData()
+      parentConsentDao = db.parentConsentDao(),
+    )
+    repo.resetDemoData()
+    repo.acknowledgeParentConsent()
   }
 
   @Test
   fun todayScreen_smallPhone_answersFocusWithSinglePrimaryActionAndTouchTargets() {
     ActivityScenario.launch(MainActivity::class.java).use {
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("today_primary_action_button").fetchSemanticsNodes().isNotEmpty()
+      }
       composeRule.waitForIdle()
 
       composeRule.onNodeWithText("Maya Brooks · Guard · 7th grade").assertIsDisplayed()
@@ -87,6 +93,9 @@ class BallerPathFlowRobolectricTest {
     val assign1Id = SampleDataSource.ASSIGNMENT_PASS_LOOK_DECIDE
 
     ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("today_primary_action_button").fetchSemanticsNodes().isNotEmpty()
+      }
       composeRule.waitForIdle()
 
       // 1. Start practice from Today
@@ -216,6 +225,9 @@ class BallerPathFlowRobolectricTest {
   @Test
   fun accountScenarioSwitcher_updatesTodayAndWorkFeedbackStates() {
     ActivityScenario.launch(MainActivity::class.java).use {
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("nav_account").fetchSemanticsNodes().isNotEmpty()
+      }
       composeRule.waitForIdle()
 
       composeRule.onNodeWithTag("nav_account").performClick()
@@ -303,6 +315,7 @@ class BallerPathFlowRobolectricTest {
       practiceDraftDao = db.practiceDraftDao(),
       assignmentDao = db.assignmentDao(),
       setupStateDao = db.setupStateDao(),
+      parentConsentDao = db.parentConsentDao(),
     )
     repo.ensureSeeded()
 

@@ -1,12 +1,16 @@
 package com.example.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -30,6 +34,7 @@ import com.example.ui.components.BallerPathBottomBar
 import com.example.ui.components.BallerPathNavRail
 import com.example.ui.components.TopLevelTab
 import com.example.ui.screens.AccountScreen
+import com.example.ui.screens.ParentConsentScreen
 import com.example.ui.screens.PlanScreen
 import com.example.ui.screens.PracticeFlowScreen
 import com.example.ui.screens.TodayScreen
@@ -44,10 +49,6 @@ fun BallerPathApp(
   modifier: Modifier = Modifier,
 ) {
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-  val navController = rememberNavController()
-  val backStackEntry by navController.currentBackStackEntryAsState()
-  val currentRoute = backStackEntry?.destination?.route ?: TopLevelTab.TODAY.route
-  var selectedWorkTab by rememberSaveable { mutableStateOf(WorkFeedbackTab.TO_DO) }
 
   val lifecycleOwner = LocalLifecycleOwner.current
   DisposableEffect(lifecycleOwner, viewModel) {
@@ -61,6 +62,28 @@ fun BallerPathApp(
       lifecycleOwner.lifecycle.removeObserver(observer)
     }
   }
+
+  if (uiState.isLoading) {
+    Box(
+      modifier = modifier
+        .fillMaxSize()
+        .background(MaterialTheme.colorScheme.background),
+    )
+    return
+  }
+
+  if (!uiState.parentConsent.isAcknowledged) {
+    ParentConsentScreen(
+      onConfirmConsent = { viewModel.acknowledgeParentConsent() },
+      modifier = modifier,
+    )
+    return
+  }
+
+  val navController = rememberNavController()
+  val backStackEntry by navController.currentBackStackEntryAsState()
+  val currentRoute = backStackEntry?.destination?.route ?: TopLevelTab.TODAY.route
+  var selectedWorkTab by rememberSaveable { mutableStateOf(WorkFeedbackTab.TO_DO) }
 
   val currentTab = TopLevelTab.entries.firstOrNull { it.route == currentRoute }
   val isPracticeRoute = currentRoute == ROUTE_PRACTICE_FLOW
@@ -135,6 +158,7 @@ fun BallerPathApp(
         Modifier
           .fillMaxSize()
           .padding(innerPadding)
+          .consumeWindowInsets(innerPadding)
           .statusBarsPadding()
       }
 

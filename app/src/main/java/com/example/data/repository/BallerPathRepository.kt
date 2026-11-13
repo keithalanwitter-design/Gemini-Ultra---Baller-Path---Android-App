@@ -2,6 +2,7 @@ package com.example.data.repository
 
 import com.example.data.model.CoachAssignment
 import com.example.data.model.DevelopmentPlan
+import com.example.data.model.ParentConsentState
 import com.example.data.model.PlanSession
 import com.example.data.model.PlayerProfile
 import com.example.data.model.PlayerSetupState
@@ -29,6 +30,7 @@ interface BallerPathRepository {
   fun observeWorkflowState(): Flow<PracticeWorkflowState>
   fun observeAssignments(): Flow<List<CoachAssignment>>
   fun observeSetupState(): Flow<PlayerSetupState>
+  fun observeParentConsent(): Flow<ParentConsentState>
 
   suspend fun ensureSeeded()
 
@@ -54,6 +56,8 @@ interface BallerPathRepository {
 
   suspend fun revealSampleCoachResponse(reflectionId: Long)
   suspend fun setSetupState(setupStage: SetupStage, hasGeneralWorkPublished: Boolean)
+  suspend fun acknowledgeParentConsent()
+  suspend fun clearParentConsentForTest()
   suspend fun applyDemoScenario(scenario: WorkflowScenarioId)
   suspend fun resetDemoData()
 }

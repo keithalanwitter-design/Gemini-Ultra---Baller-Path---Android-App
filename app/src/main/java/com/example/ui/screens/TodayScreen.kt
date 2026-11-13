@@ -45,6 +45,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
@@ -206,7 +208,7 @@ fun TodayScreen(
         }
       }
 
-      Spacer(modifier = Modifier.height(6.dp))
+      Spacer(modifier = Modifier.height(24.dp))
     }
   }
 }
@@ -365,6 +367,9 @@ private fun TodayActiveHeroContent(
           modifier = Modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = 50.dp)
+            .semantics {
+              contentDescription = "$actionLabel: $heroTitle"
+            }
             .testTag("today_primary_action_button"),
           shape = RoundedCornerShape(14.dp),
           colors = ButtonDefaults.buttonColors(

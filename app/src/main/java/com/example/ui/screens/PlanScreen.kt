@@ -40,6 +40,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
 import com.example.R
@@ -301,7 +303,7 @@ fun PlanScreen(
         modifier = Modifier.testTag("plan_headline_visual"),
       )
 
-      Spacer(modifier = Modifier.height(8.dp))
+      Spacer(modifier = Modifier.height(24.dp))
     }
   }
 }
@@ -363,6 +365,9 @@ private fun PlanSessionCard(
           modifier = Modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = 48.dp)
+            .semantics {
+              contentDescription = "$actionLabel: ${session.title}"
+            }
             .testTag("plan_open_practice_${session.id}"),
           colors = ButtonDefaults.buttonColors(
             containerColor = BurntOrange,

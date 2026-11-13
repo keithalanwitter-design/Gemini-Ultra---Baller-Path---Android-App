@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -45,6 +46,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
@@ -358,6 +361,9 @@ fun AccountScreen(
           modifier = Modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = 48.dp)
+            .semantics {
+              contentDescription = "Reset sample demo data to Practice ready"
+            }
             .testTag("reset_demo_button"),
           shape = RoundedCornerShape(12.dp),
           border = BorderStroke(1.dp, BurntOrange),
@@ -457,7 +463,73 @@ fun AccountScreen(
         }
       }
 
-      Spacer(modifier = Modifier.height(8.dp))
+      // Privacy & Parent Consent Card (always shown in pilot & Play builds)
+      Card(
+        modifier = Modifier
+          .fillMaxWidth()
+          .testTag("privacy_consent_card"),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
+      ) {
+        Column(
+          modifier = Modifier.padding(16.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = Icons.Outlined.VerifiedUser,
+              contentDescription = null,
+              tint = BurntOrange,
+              modifier = Modifier.size(20.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+              text = "Privacy & Parent Permission",
+              style = MaterialTheme.typography.titleMedium,
+              color = MaterialTheme.colorScheme.onSurface,
+            )
+          }
+          Text(
+            text = if (uiState.parentConsent.isAcknowledged) {
+              "Parent or guardian confirmation saved on this device. Baller Path is for a parent or guardian of a player in grades 4–8, and Coach Keith reviews submitted work."
+            } else {
+              "Parent or guardian confirmation required before first use."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          Text(
+            text = "Pilot storage: reflections, drafts, and notes remain local on this device with no login, no ad tracking, and no third-party data sharing.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+          ) {
+            Column(
+              modifier = Modifier.padding(10.dp),
+              verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+              Text(
+                text = stringResource(R.string.privacy_policy_label),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+              Text(
+                text = stringResource(R.string.privacy_policy_url),
+                style = MaterialTheme.typography.bodySmall,
+                color = NavyDeep,
+                modifier = Modifier.testTag("account_privacy_policy_url"),
+              )
+            }
+          }
+        }
+      }
+
+      Spacer(modifier = Modifier.height(24.dp))
     }
   }
 }

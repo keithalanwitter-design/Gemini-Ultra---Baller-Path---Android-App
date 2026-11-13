@@ -46,8 +46,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
@@ -108,26 +111,32 @@ fun BallerPathBottomBar(
     TopLevelTab.entries.forEach { tab ->
       val selected = currentTab == tab
       val label = stringResource(tab.labelRes)
+      val displayLabel = if (tab == TopLevelTab.WORK_FEEDBACK) "Work +\nFeedback" else label
       NavigationBarItem(
         selected = selected,
         onClick = { onSelectTab(tab) },
         modifier = Modifier
           .defaultMinSize(minHeight = 48.dp)
+          .semantics(mergeDescendants = true) {
+            contentDescription = "$label tab"
+          }
           .testTag(tab.testTag),
         icon = {
           Icon(
             imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
-            contentDescription = label,
+            contentDescription = null,
           )
         },
         label = {
           Text(
-            text = label,
-            fontSize = 11.5.sp,
-            lineHeight = 14.sp,
+            text = displayLabel,
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             textAlign = TextAlign.Center,
             maxLines = 2,
+            softWrap = true,
+            overflow = TextOverflow.Ellipsis,
           )
         },
         colors = NavigationBarItemDefaults.colors(
@@ -156,25 +165,30 @@ fun BallerPathNavRail(
     TopLevelTab.entries.forEach { tab ->
       val selected = currentTab == tab
       val label = stringResource(tab.labelRes)
+      val displayLabel = if (tab == TopLevelTab.WORK_FEEDBACK) "Work +\nFeedback" else label
       NavigationRailItem(
         selected = selected,
         onClick = { onSelectTab(tab) },
         modifier = Modifier
           .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+          .semantics(mergeDescendants = true) {
+            contentDescription = "$label tab"
+          }
           .testTag(tab.testTag),
         icon = {
           Icon(
             imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
-            contentDescription = label,
+            contentDescription = null,
           )
         },
         label = {
           Text(
-            text = label,
-            fontSize = 12.sp,
-            lineHeight = 15.sp,
+            text = displayLabel,
+            fontSize = 11.sp,
+            lineHeight = 13.sp,
             textAlign = TextAlign.Center,
             maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
           )
         },
         colors = NavigationRailItemDefaults.colors(

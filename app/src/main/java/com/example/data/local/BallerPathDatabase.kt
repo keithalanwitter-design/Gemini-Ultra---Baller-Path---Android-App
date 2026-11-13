@@ -17,9 +17,10 @@ import com.example.data.sample.SampleDataSource
     PracticeDraftStateEntity::class,
     AssignmentEntity::class,
     SetupStateEntity::class,
+    ParentConsentEntity::class,
   ],
-  version = 3,
-  exportSchema = false,
+  version = 4,
+  exportSchema = true,
 )
 abstract class BallerPathDatabase : RoomDatabase() {
 
@@ -27,6 +28,7 @@ abstract class BallerPathDatabase : RoomDatabase() {
   abstract fun practiceDraftDao(): PracticeDraftDao
   abstract fun assignmentDao(): AssignmentDao
   abstract fun setupStateDao(): SetupStateDao
+  abstract fun parentConsentDao(): ParentConsentDao
 
   companion object {
     @Volatile
@@ -155,6 +157,28 @@ abstract class BallerPathDatabase : RoomDatabase() {
       }
     }
 
+    val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        // Preserve all existing reflections, drafts, and coach responses while adding parent consent gate.
+        db.execSQL(
+          """
+          CREATE TABLE IF NOT EXISTS `parent_consent` (
+            `id` INTEGER NOT NULL,
+            `isAcknowledged` INTEGER NOT NULL,
+            `acknowledgedAtMillis` INTEGER NOT NULL,
+            PRIMARY KEY(`id`)
+          )
+          """.trimIndent()
+        )
+        val consentCv = ContentValues().apply {
+          put("id", 1)
+          put("isAcknowledged", 0)
+          put("acknowledgedAtMillis", 0L)
+        }
+        db.insert("parent_consent", SQLiteDatabase.CONFLICT_IGNORE, consentCv)
+      }
+    }
+
     fun getInstance(context: Context): BallerPathDatabase {
       return instance ?: synchronized(this) {
         instance ?: Room.databaseBuilder(
@@ -162,7 +186,7 @@ abstract class BallerPathDatabase : RoomDatabase() {
           BallerPathDatabase::class.java,
           "baller_path_demo.db",
         )
-          .addMigrations(MIGRATION_2_3)
+          .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
           .build()
           .also { instance = it }
       }

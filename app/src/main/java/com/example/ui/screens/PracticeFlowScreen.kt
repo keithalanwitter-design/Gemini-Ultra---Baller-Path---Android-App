@@ -59,6 +59,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -172,6 +174,9 @@ fun PracticeFlowScreen(
                 .widthIn(max = 620.dp)
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = 54.dp)
+                .semantics {
+                  contentDescription = "Submit reflection for ${assignment.title} to Coach Keith"
+                }
                 .testTag("submit_reflection_button"),
               shape = RoundedCornerShape(14.dp),
               colors = ButtonDefaults.buttonColors(
@@ -204,6 +209,9 @@ fun PracticeFlowScreen(
                 .widthIn(max = 620.dp)
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = 54.dp)
+                .semantics {
+                  contentDescription = nextLabel
+                }
                 .testTag("practice_next_button"),
               shape = RoundedCornerShape(14.dp),
               colors = ButtonDefaults.buttonColors(
@@ -311,6 +319,9 @@ fun PracticeFlowScreen(
                     onClick = onToggleTimer,
                     modifier = Modifier
                       .defaultMinSize(minWidth = 104.dp, minHeight = 48.dp)
+                      .semantics {
+                        contentDescription = "$timerButtonLabel timer for ${currentStep.title}"
+                      }
                       .testTag("practice_timer_toggle"),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
@@ -556,7 +567,7 @@ fun PracticeFlowScreen(
           }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(20.dp))
       }
     }
   }

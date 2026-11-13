@@ -20,4 +20,13 @@
     <string name="submit_reflection">Submit Reflection</string>
     <string name="coach_response_label">Coach Keith</string>
     <string name="next_adjustment_label">Try the next rep</string>
+    <string name="privacy_policy_label">Privacy Policy (replace URL before Play upload)</string>
+    <string name="privacy_policy_url">https://ballerpath.com/privacy-policy-placeholder</string>
+    <string name="parent_consent_title">Parent or Guardian Permission</string>
+    <string name="parent_consent_audience">Baller Path is for a parent or guardian of a player in grades 4–8.</string>
+    <string name="parent_consent_coach_note">Coach Keith reviews the work submitted in this app to build your player\'s weekly plan and coaching notes. In this pilot build, reflections, drafts, and notes stay stored locally on this device.</string>
+    <string name="parent_consent_checkbox_label">I am the parent or legal guardian of a player in grades 4–8, and I understand Coach Keith reviews the submitted work.</string>
+    <string name="parent_consent_continue">Continue to Baller Path</string>
+    <string name="cd_parent_consent_checkbox">Confirm you are a parent or guardian of a player in grades 4 to 8 and that Coach Keith reviews the work</string>
+    <string name="cd_parent_consent_continue">Continue to Baller Path after confirming parent or guardian permission</string>
 </resources>

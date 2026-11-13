@@ -22,6 +22,7 @@ class MainActivity : ComponentActivity() {
       practiceDraftDao = database.practiceDraftDao(),
       assignmentDao = database.assignmentDao(),
       setupStateDao = database.setupStateDao(),
+      parentConsentDao = database.parentConsentDao(),
     )
 
     setContent {

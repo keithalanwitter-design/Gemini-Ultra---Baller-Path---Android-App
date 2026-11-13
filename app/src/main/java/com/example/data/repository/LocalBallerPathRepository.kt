@@ -1,6 +1,8 @@
 package com.example.data.repository
 
 import com.example.data.local.AssignmentDao
+import com.example.data.local.ParentConsentDao
+import com.example.data.local.ParentConsentEntity
 import com.example.data.local.PracticeDraftDao
 import com.example.data.local.PracticeDraftStateEntity
 import com.example.data.local.ReflectionDao
@@ -9,6 +11,7 @@ import com.example.data.local.SetupStateDao
 import com.example.data.local.SetupStateEntity
 import com.example.data.model.CoachAssignment
 import com.example.data.model.DevelopmentPlan
+import com.example.data.model.ParentConsentState
 import com.example.data.model.PlanSession
 import com.example.data.model.PlayerProfile
 import com.example.data.model.PlayerSetupState
@@ -29,6 +32,7 @@ class LocalBallerPathRepository(
   private val practiceDraftDao: PracticeDraftDao,
   private val assignmentDao: AssignmentDao? = null,
   private val setupStateDao: SetupStateDao? = null,
+  private val parentConsentDao: ParentConsentDao? = null,
   private val clockMillis: () -> Long = { System.currentTimeMillis() },
 ) : BallerPathRepository {
 
@@ -97,6 +101,13 @@ class LocalBallerPathRepository(
     }
   }
 
+  override fun observeParentConsent(): Flow<ParentConsentState> {
+    val dao = parentConsentDao ?: return flowOf(ParentConsentState(isAcknowledged = false))
+    return dao.observeConsent().map { entity ->
+      entity?.toDomain() ?: ParentConsentState(isAcknowledged = false)
+    }
+  }
+
   override suspend fun ensureSeeded() {
     val now = clockMillis()
     if (reflectionDao.countReflections() == 0) {
@@ -121,6 +132,17 @@ class LocalBallerPathRepository(
             id = 1,
             setupStage = SetupStage.WORK_READY.id,
             hasGeneralWorkPublished = true,
+          )
+        )
+      }
+    }
+    parentConsentDao?.let { dao ->
+      if (dao.getConsent() == null) {
+        dao.upsertConsent(
+          ParentConsentEntity(
+            id = 1,
+            isAcknowledged = false,
+            acknowledgedAtMillis = 0L,
           )
         )
       }
@@ -228,6 +250,26 @@ class LocalBallerPathRepository(
         id = 1,
         setupStage = setupStage.id,
         hasGeneralWorkPublished = hasGeneralWorkPublished,
+      )
+    )
+  }
+
+  override suspend fun acknowledgeParentConsent() {
+    parentConsentDao?.upsertConsent(
+      ParentConsentEntity(
+        id = 1,
+        isAcknowledged = true,
+        acknowledgedAtMillis = clockMillis(),
+      )
+    )
+  }
+
+  override suspend fun clearParentConsentForTest() {
+    parentConsentDao?.upsertConsent(
+      ParentConsentEntity(
+        id = 1,
+        isAcknowledged = false,
+        acknowledgedAtMillis = 0L,
       )
     )
   }

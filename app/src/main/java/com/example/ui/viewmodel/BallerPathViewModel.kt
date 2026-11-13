@@ -10,6 +10,7 @@ import com.example.data.model.AssignmentStatus
 import com.example.data.model.AssignmentWorkItem
 import com.example.data.model.CoachAssignment
 import com.example.data.model.DevelopmentPlan
+import com.example.data.model.ParentConsentState
 import com.example.data.model.PlanSession
 import com.example.data.model.PlayerProfile
 import com.example.data.model.PlayerSetupState
@@ -55,6 +56,7 @@ data class BallerPathUiState(
     SampleDataSource.generalWorkAssignment,
   ),
   val setupState: PlayerSetupState = PlayerSetupState(),
+  val parentConsent: ParentConsentState = ParentConsentState(),
   val planSessions: List<PlanSession> = SampleDataSource.weekTwoPlan,
   val reflections: List<PracticeReflection> = emptyList(),
   val practice: PracticeSessionUiState = PracticeSessionUiState(),
@@ -317,11 +319,12 @@ class BallerPathViewModel(
     repository.observeReflections(),
     combine(
       practiceState,
+      repository.observeParentConsent(),
       demoStatusMessage,
       moreWorkReadyPreview,
       seeded,
-    ) { practice, statusMsg, moreWork, isSeeded ->
-      listOf(practice, statusMsg, moreWork, isSeeded)
+    ) { practice, consent, statusMsg, moreWork, isSeeded ->
+      listOf(practice, consent, statusMsg, moreWork, isSeeded)
     },
   ) { values ->
     @Suppress("UNCHECKED_CAST")
@@ -338,9 +341,10 @@ class BallerPathViewModel(
     @Suppress("UNCHECKED_CAST")
     val extra = values[7] as List<Any?>
     val practice = extra[0] as PracticeSessionUiState
-    val statusMsg = extra[1] as String?
-    val isMoreWork = extra[2] as Boolean
-    val isSeeded = extra[3] as Boolean
+    val parentConsent = extra[1] as ParentConsentState
+    val statusMsg = extra[2] as String?
+    val isMoreWork = extra[3] as Boolean
+    val isSeeded = extra[4] as Boolean
 
     BallerPathUiState(
       isLoading = !isSeeded,
@@ -349,6 +353,7 @@ class BallerPathViewModel(
       developmentPlan = planInfo,
       assignments = assignments,
       setupState = setupState,
+      parentConsent = parentConsent,
       planSessions = planSessions,
       reflections = reflections,
       practice = practice,
@@ -628,6 +633,12 @@ class BallerPathViewModel(
           else "Setup state: Plan being prepared (no general work yet)."
         SetupStage.WORK_READY -> "Setup state: Work ready."
       }
+    }
+  }
+
+  fun acknowledgeParentConsent() {
+    viewModelScope.launch {
+      repository.acknowledgeParentConsent()
     }
   }
 

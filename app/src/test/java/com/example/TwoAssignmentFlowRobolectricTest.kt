@@ -53,12 +53,15 @@ class TwoAssignmentFlowRobolectricTest {
   fun resetDemoDatabase() = runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val db = BallerPathDatabase.getInstance(context)
-    LocalBallerPathRepository(
+    val repo = LocalBallerPathRepository(
       reflectionDao = db.reflectionDao(),
       practiceDraftDao = db.practiceDraftDao(),
       assignmentDao = db.assignmentDao(),
       setupStateDao = db.setupStateDao(),
-    ).resetDemoData()
+      parentConsentDao = db.parentConsentDao(),
+    )
+    repo.resetDemoData()
+    repo.acknowledgeParentConsent()
   }
 
   /**
@@ -78,6 +81,7 @@ class TwoAssignmentFlowRobolectricTest {
       practiceDraftDao = db.practiceDraftDao(),
       assignmentDao = db.assignmentDao(),
       setupStateDao = db.setupStateDao(),
+      parentConsentDao = db.parentConsentDao(),
     )
 
     // Step 1: Maya has assignment 1 awaiting review and assignment 2 ready.
@@ -277,9 +281,9 @@ class TwoAssignmentFlowRobolectricTest {
     v2Db.close()
     rawHelper.close()
 
-    // 2. Open BallerPathDatabase v3 using MIGRATION_2_3 (no destructive migration!)
+    // 2. Open BallerPathDatabase at current version using MIGRATION_2_3 + MIGRATION_3_4 (no destructive migration!)
     val migratedDb = Room.databaseBuilder(context, BallerPathDatabase::class.java, dbName)
-      .addMigrations(BallerPathDatabase.MIGRATION_2_3)
+      .addMigrations(BallerPathDatabase.MIGRATION_2_3, BallerPathDatabase.MIGRATION_3_4)
       .allowMainThreadQueries()
       .build()
 
@@ -316,6 +320,7 @@ class TwoAssignmentFlowRobolectricTest {
       practiceDraftDao = db.practiceDraftDao(),
       assignmentDao = db.assignmentDao(),
       setupStateDao = db.setupStateDao(),
+      parentConsentDao = db.parentConsentDao(),
     )
 
     // B2a: Setup in progress -> shows 2 business day notice, hides personal drills
@@ -369,6 +374,336 @@ class TwoAssignmentFlowRobolectricTest {
       }
       composeRule.onNodeWithText("Second attempt after adjusting spacing.").performScrollTo().assertIsDisplayed()
       composeRule.onNodeWithText("First attempt reading the drive.").performScrollTo().assertIsDisplayed()
+    }
+  }
+
+  /**
+   * Pilot Prep Item 4:
+   * First use requires Parent/Guardian consent stating grades 4-8 & Coach Keith review,
+   * persists locally in Room, and skips the gate after acknowledgment.
+   */
+  @Test
+  fun parentConsentGate_blocksFirstUseUntilAcknowledged_andPersistsAcrossRestart() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val db = BallerPathDatabase.getInstance(context)
+    val repo = LocalBallerPathRepository(
+      reflectionDao = db.reflectionDao(),
+      practiceDraftDao = db.practiceDraftDao(),
+      assignmentDao = db.assignmentDao(),
+      setupStateDao = db.setupStateDao(),
+      parentConsentDao = db.parentConsentDao(),
+    )
+    runBlocking { repo.clearParentConsentForTest() }
+
+    ActivityScenario.launch(MainActivity::class.java).use {
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("parent_consent_card").fetchSemanticsNodes().isNotEmpty()
+      }
+      composeRule.onNodeWithText("Baller Path is for a parent or guardian of a player in grades 4–8.")
+        .assertIsDisplayed()
+      composeRule.onNodeWithText("Coach Keith reviews the work", substring = true).assertIsDisplayed()
+      assertTrue(composeRule.onAllNodesWithTag("bottom_navigation_bar").fetchSemanticsNodes().isEmpty())
+
+      // Require confirmation checkbox first
+      composeRule.onNodeWithTag("consent_continue_button").performScrollTo().performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("consent_validation_error").performScrollTo().assertIsDisplayed()
+
+      // Check box and continue -> enters Today
+      composeRule.onNodeWithTag("consent_checkbox_row").performScrollTo().performClick()
+      composeRule.onNodeWithTag("consent_continue_button").performScrollTo().performClick()
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("today_primary_action_button").fetchSemanticsNodes().isNotEmpty()
+      }
+      composeRule.onNodeWithTag("today_primary_action_button").assertIsDisplayed()
+    }
+
+    // Cold restart remembers parent consent and opens directly into Today
+    ActivityScenario.launch(MainActivity::class.java).use {
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("today_primary_action_button").fetchSemanticsNodes().isNotEmpty()
+      }
+      assertTrue(composeRule.onAllNodesWithTag("parent_consent_card").fetchSemanticsNodes().isEmpty())
+    }
+  }
+
+  /**
+   * Pilot Prep Item 4:
+   * Real v3 -> v4 database migration keeps every reflection, draft, and coach response intact
+   * while adding the parent_consent table.
+   */
+  @Test
+  fun migration3To4_keepsAllReflectionsDraftsAndFeedback_andAddsParentConsent(): Unit = runBlocking {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val dbName = "migration_v3_v4_test.db"
+    context.deleteDatabase(dbName)
+
+    val a1Reflection = "V3 reflection awaiting Coach Keith."
+    val a2Reflection = "V3 reflection with Coach Keith reply."
+    val a2CoachReply = "V3 Coach Keith reply kept safely."
+    val a2NextRep = "V3 Try the next rep cue kept safely."
+    val a1Draft = "V3 assignment 1 draft kept safely."
+    val a2Draft = "V3 assignment 2 draft kept safely."
+
+    val helperConfig = SupportSQLiteOpenHelper.Configuration.builder(context)
+      .name(dbName)
+      .callback(
+        object : SupportSQLiteOpenHelper.Callback(3) {
+          override fun onCreate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+              """
+              CREATE TABLE IF NOT EXISTS `practice_reflections` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `assignmentId` TEXT NOT NULL DEFAULT 'assign-pass-look-decide',
+                `drillId` TEXT NOT NULL,
+                `drillTitle` TEXT NOT NULL,
+                `laneObservation` TEXT NOT NULL,
+                `readTag` TEXT NOT NULL,
+                `createdAtMillis` INTEGER NOT NULL,
+                `sampleCoachLabel` TEXT NOT NULL,
+                `sampleCoachResponse` TEXT NOT NULL,
+                `nextAdjustment` TEXT NOT NULL,
+                `isCoachResponseRevealed` INTEGER NOT NULL,
+                `isSampleSeed` INTEGER NOT NULL
+              )
+              """.trimIndent()
+            )
+            db.execSQL(
+              """
+              CREATE TABLE IF NOT EXISTS `practice_workflow_state` (
+                `id` INTEGER NOT NULL,
+                `hasActiveSession` INTEGER NOT NULL,
+                `currentStepId` TEXT NOT NULL,
+                `isReflectionStage` INTEGER NOT NULL,
+                `remainingSeconds` INTEGER NOT NULL,
+                `hasStartedTimer` INTEGER NOT NULL,
+                `reflectionDraft` TEXT NOT NULL,
+                `updatedAtMillis` INTEGER NOT NULL,
+                PRIMARY KEY(`id`)
+              )
+              """.trimIndent()
+            )
+            db.execSQL(
+              """
+              CREATE TABLE IF NOT EXISTS `assignments` (
+                `assignmentId` TEXT NOT NULL,
+                `sortOrder` INTEGER NOT NULL,
+                `drillId` TEXT NOT NULL,
+                `title` TEXT NOT NULL,
+                `dayTag` TEXT NOT NULL,
+                `focusHeadline` TEXT NOT NULL,
+                `totalMinutes` INTEGER NOT NULL,
+                `coachCue` TEXT NOT NULL,
+                `reflectionPrompt` TEXT NOT NULL,
+                `isGeneralWork` INTEGER NOT NULL,
+                `stepsJson` TEXT NOT NULL,
+                `starterCuesJson` TEXT NOT NULL,
+                `hasActiveSession` INTEGER NOT NULL,
+                `currentStepId` TEXT NOT NULL,
+                `isReflectionStage` INTEGER NOT NULL,
+                `remainingSeconds` INTEGER NOT NULL,
+                `hasStartedTimer` INTEGER NOT NULL,
+                `reflectionDraft` TEXT NOT NULL,
+                `updatedAtMillis` INTEGER NOT NULL,
+                PRIMARY KEY(`assignmentId`)
+              )
+              """.trimIndent()
+            )
+            db.execSQL(
+              """
+              CREATE TABLE IF NOT EXISTS `setup_state` (
+                `id` INTEGER NOT NULL,
+                `setupStage` TEXT NOT NULL,
+                `hasGeneralWorkPublished` INTEGER NOT NULL,
+                PRIMARY KEY(`id`)
+              )
+              """.trimIndent()
+            )
+          }
+
+          override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        }
+      )
+      .build()
+
+    val rawHelper = FrameworkSQLiteOpenHelperFactory().create(helperConfig)
+    val v3Db = rawHelper.writableDatabase
+    v3Db.insert(
+      "practice_reflections",
+      SQLiteDatabase.CONFLICT_ABORT,
+      android.content.ContentValues().apply {
+        put("assignmentId", assign1Id)
+        put("drillId", SampleDataSource.DRILL_PASS_LOOK_DECIDE)
+        put("drillTitle", "Pass, Look, Decide")
+        put("laneObservation", a1Reflection)
+        put("readTag", "Pass, Look, Decide · 8 min")
+        put("createdAtMillis", 1_700_000_000_000L)
+        put("sampleCoachLabel", "Coach Keith")
+        put("sampleCoachResponse", "Pending")
+        put("nextAdjustment", "Next rep")
+        put("isCoachResponseRevealed", 0)
+        put("isSampleSeed", 0)
+      },
+    )
+    v3Db.insert(
+      "practice_reflections",
+      SQLiteDatabase.CONFLICT_ABORT,
+      android.content.ContentValues().apply {
+        put("assignmentId", assign2Id)
+        put("drillId", SampleDataSource.DRILL_CORNER_RELOCATION)
+        put("drillTitle", "Corner Relocation Read")
+        put("laneObservation", a2Reflection)
+        put("readTag", "Corner Relocation Read · 9 min")
+        put("createdAtMillis", 1_700_000_100_000L)
+        put("sampleCoachLabel", "Coach Keith")
+        put("sampleCoachResponse", a2CoachReply)
+        put("nextAdjustment", a2NextRep)
+        put("isCoachResponseRevealed", 1)
+        put("isSampleSeed", 0)
+      },
+    )
+    v3Db.insert(
+      "assignments",
+      SQLiteDatabase.CONFLICT_ABORT,
+      android.content.ContentValues().apply {
+        put("assignmentId", assign1Id)
+        put("sortOrder", 0)
+        put("drillId", SampleDataSource.DRILL_PASS_LOOK_DECIDE)
+        put("title", "Pass, Look, Decide")
+        put("dayTag", "Monday")
+        put("focusHeadline", "Focus")
+        put("totalMinutes", 8)
+        put("coachCue", "Cue")
+        put("reflectionPrompt", "Prompt")
+        put("isGeneralWork", 0)
+        put("stepsJson", "[]")
+        put("starterCuesJson", "[]")
+        put("hasActiveSession", 1)
+        put("currentStepId", "decide")
+        put("isReflectionStage", 1)
+        put("remainingSeconds", 0)
+        put("hasStartedTimer", 1)
+        put("reflectionDraft", a1Draft)
+        put("updatedAtMillis", 1_700_000_200_000L)
+      },
+    )
+    v3Db.insert(
+      "assignments",
+      SQLiteDatabase.CONFLICT_ABORT,
+      android.content.ContentValues().apply {
+        put("assignmentId", assign2Id)
+        put("sortOrder", 1)
+        put("drillId", SampleDataSource.DRILL_CORNER_RELOCATION)
+        put("title", "Corner Relocation Read")
+        put("dayTag", "Wednesday")
+        put("focusHeadline", "Focus 2")
+        put("totalMinutes", 9)
+        put("coachCue", "Cue 2")
+        put("reflectionPrompt", "Prompt 2")
+        put("isGeneralWork", 0)
+        put("stepsJson", "[]")
+        put("starterCuesJson", "[]")
+        put("hasActiveSession", 1)
+        put("currentStepId", "corner_read")
+        put("isReflectionStage", 0)
+        put("remainingSeconds", 120)
+        put("hasStartedTimer", 1)
+        put("reflectionDraft", a2Draft)
+        put("updatedAtMillis", 1_700_000_300_000L)
+      },
+    )
+    v3Db.insert(
+      "setup_state",
+      SQLiteDatabase.CONFLICT_ABORT,
+      android.content.ContentValues().apply {
+        put("id", 1)
+        put("setupStage", "WORK_READY")
+        put("hasGeneralWorkPublished", 1)
+      },
+    )
+    v3Db.close()
+    rawHelper.close()
+
+    val migratedDb = Room.databaseBuilder(context, BallerPathDatabase::class.java, dbName)
+      .addMigrations(BallerPathDatabase.MIGRATION_2_3, BallerPathDatabase.MIGRATION_3_4)
+      .allowMainThreadQueries()
+      .build()
+
+    val reflections = migratedDb.reflectionDao().observeReflections().first()
+    val migratedA1 = reflections.first { it.assignmentId == assign1Id }
+    val migratedA2 = reflections.first { it.assignmentId == assign2Id }
+    assertEquals(a1Reflection, migratedA1.laneObservation)
+    assertEquals(a2Reflection, migratedA2.laneObservation)
+    assertEquals(a2CoachReply, migratedA2.sampleCoachResponse)
+    assertEquals(a2NextRep, migratedA2.nextAdjustment)
+    assertTrue(migratedA2.isCoachResponseRevealed)
+
+    assertEquals(a1Draft, migratedDb.assignmentDao().getAssignment(assign1Id)?.reflectionDraft)
+    assertEquals(a2Draft, migratedDb.assignmentDao().getAssignment(assign2Id)?.reflectionDraft)
+    assertEquals(false, migratedDb.parentConsentDao().observeConsent().first()?.isAcknowledged ?: false)
+
+    migratedDb.close()
+    context.deleteDatabase(dbName)
+  }
+
+  /**
+   * Pilot Prep Item 3:
+   * Backgrounding the app saves the active assignment draft immediately, and cold restart
+   * restores the exact same assignment and draft.
+   */
+  @Test
+  fun backgroundingApp_savesActiveAssignmentDraft_andColdRestartRestoresSameAssignmentAndDraft() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val db = BallerPathDatabase.getInstance(context)
+    val repo = LocalBallerPathRepository(
+      reflectionDao = db.reflectionDao(),
+      practiceDraftDao = db.practiceDraftDao(),
+      assignmentDao = db.assignmentDao(),
+      setupStateDao = db.setupStateDao(),
+      parentConsentDao = db.parentConsentDao(),
+    )
+    runBlocking { repo.applyDemoScenario(WorkflowScenarioId.AWAITING_COACH) }
+
+    val draftText = "Background flush saved this Corner Relocation draft safely"
+
+    ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithText("Corner Relocation Read").fetchSemanticsNodes().isNotEmpty()
+      }
+      composeRule.onNodeWithTag("today_primary_action_button").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("practice_drill_title").assertTextEquals("Corner Relocation Read")
+
+      // Navigate to reflection stage and enter draft
+      composeRule.onNodeWithTag("practice_next_button").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("practice_next_button").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("practice_next_button").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("reflection_input").performScrollTo().performTextInput(draftText)
+      composeRule.waitForIdle()
+
+      // Background the app (ON_STOP)
+      scenario.moveToState(Lifecycle.State.CREATED)
+      ShadowLooper.idleMainLooper(300, TimeUnit.MILLISECONDS)
+    }
+
+    // Verify Room persisted the exact assignment & draft synchronously on backgrounding
+    val savedAssignment = runBlocking { db.assignmentDao().getAssignment(assign2Id) }
+    assertEquals(draftText, savedAssignment?.reflectionDraft)
+    assertTrue(savedAssignment?.isReflectionStage == true)
+
+    // Cold restart restores Corner Relocation Read + the saved draft
+    ActivityScenario.launch(MainActivity::class.java).use {
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithText("Resume").fetchSemanticsNodes().isNotEmpty()
+      }
+      composeRule.onNodeWithText("Corner Relocation Read").assertIsDisplayed()
+      composeRule.onNodeWithTag("today_primary_action_button").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("practice_drill_title").assertTextEquals("Corner Relocation Read")
+      composeRule.onNodeWithTag("reflection_input").assertTextContains(draftText, substring = true)
     }
   }
 }

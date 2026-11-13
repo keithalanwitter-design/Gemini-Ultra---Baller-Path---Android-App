@@ -197,3 +197,9 @@ data class PracticeWorkflowState(
   val reflectionDraft: String = "",
   val updatedAtMillis: Long = 0L,
 )
+
+data class ParentConsentState(
+  val isAcknowledged: Boolean = false,
+  val acknowledgedAtMillis: Long = 0L,
+)
+
