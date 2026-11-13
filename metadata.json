@@ -1,0 +1,6 @@
+{
+  "name": "Baller Path",
+  "description": "Coach-led basketball development app guided by Coach Keith with Today, Plan, Work + Feedback, and Account.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

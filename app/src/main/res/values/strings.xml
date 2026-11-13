@@ -1,0 +1,23 @@
+<resources>
+    <string name="app_name">Baller Path</string>
+    <string name="cd_coach_keith_avatar">Coach Keith portrait</string>
+    <string name="cd_court_diagram">Pass, Look, Decide half-court lane diagram</string>
+    <string name="cd_baller_path_logo">Baller Path logo</string>
+    <string name="cd_headline_one_priority">One clear priority. Not ten things. Not everything.</string>
+    <string name="cd_headline_work_purpose">Work with a purpose. Every drill connects to the focus.</string>
+    <string name="cd_headline_notice_grow">Notice. Adjust. Grow. What worked and what changes next.</string>
+    <string name="cd_back_button">Navigate back</string>
+    <string name="cd_toggle_timer">Toggle practice timer</string>
+    <string name="cd_reset_timer">Reset step timer</string>
+    <string name="nav_today">Today</string>
+    <string name="nav_plan">Plan</string>
+    <string name="nav_work_feedback">Work + Feedback</string>
+    <string name="nav_account">Account</string>
+    <string name="today_prompt_question">What should I work on today?</string>
+    <string name="today_primary_cta">Start Pass, Look, Decide (8 min)</string>
+    <string name="practice_title">Pass, Look, Decide</string>
+    <string name="reflection_prompt">What did you notice about the lane?</string>
+    <string name="submit_reflection">Submit Reflection</string>
+    <string name="coach_response_label">Coach Keith</string>
+    <string name="next_adjustment_label">Next Adjustment</string>
+</resources>

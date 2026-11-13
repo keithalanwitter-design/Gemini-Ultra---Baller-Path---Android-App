@@ -1,0 +1,434 @@
+package com.example.ui.screens
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.FamilyRestroom
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material.icons.outlined.RestartAlt
+import androidx.compose.material.icons.outlined.Science
+import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.example.BuildConfig
+import com.example.R
+import com.example.data.model.WorkflowScenarioId
+import com.example.ui.components.CoachKeithAvatar
+import com.example.ui.components.FictionalDemoBadge
+import com.example.ui.theme.BurntOrange
+import com.example.ui.theme.NavyDeep
+import com.example.ui.viewmodel.BallerPathUiState
+
+@Composable
+fun AccountScreen(
+  uiState: BallerPathUiState,
+  onSelectScenario: (WorkflowScenarioId) -> Unit,
+  onResetDemoData: () -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val scrollState = rememberScrollState()
+  val activeScenario = uiState.currentScenario
+
+  Box(
+    modifier = modifier
+      .fillMaxSize()
+      .background(MaterialTheme.colorScheme.background),
+    contentAlignment = Alignment.TopCenter,
+  ) {
+    Column(
+      modifier = Modifier
+        .widthIn(max = 620.dp)
+        .fillMaxSize()
+        .verticalScroll(scrollState)
+        .padding(horizontal = 16.dp, vertical = 14.dp),
+      verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+      Text(
+        text = if (BuildConfig.DEBUG) "Account & Demo Controls" else "Account",
+        style = MaterialTheme.typography.headlineMedium,
+        color = MaterialTheme.colorScheme.onBackground,
+      )
+
+      // Official Baller Path Brand Lockup Card
+      Surface(
+        modifier = Modifier
+          .fillMaxWidth()
+          .testTag("account_brand_lockup_card"),
+        shape = MaterialTheme.shapes.large,
+        color = Color.White,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+      ) {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+          horizontalAlignment = Alignment.CenterHorizontally,
+          verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+          Image(
+            painter = painterResource(id = R.drawable.logo_baller_path_stacked),
+            contentDescription = stringResource(R.string.cd_baller_path_logo),
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.height(92.dp),
+          )
+          Text(
+            text = "A clear next step. A coach in your corner.",
+            style = MaterialTheme.typography.labelMedium,
+            color = NavyDeep,
+          )
+        }
+      }
+
+      // Simulated Family Profile Card
+      Surface(
+        modifier = Modifier
+          .fillMaxWidth()
+          .testTag("simulated_family_card"),
+        shape = MaterialTheme.shapes.large,
+        color = NavyDeep,
+      ) {
+        Column(
+          modifier = Modifier.padding(18.dp),
+          verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = Icons.Outlined.FamilyRestroom,
+              contentDescription = null,
+              tint = BurntOrange,
+              modifier = Modifier.size(22.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+              text = uiState.family.householdLabel,
+              style = MaterialTheme.typography.labelMedium,
+              color = BurntOrange,
+            )
+          }
+
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+              modifier = Modifier
+                .size(46.dp)
+                .clip(CircleShape)
+                .background(BurntOrange),
+              contentAlignment = Alignment.Center,
+            ) {
+              val initials = uiState.family.parentName
+                .split(" ")
+                .filter { it.isNotBlank() }
+                .take(2)
+                .joinToString("") { it.first().uppercase() }
+                .ifEmpty { "AP" }
+              Text(
+                text = initials,
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+              )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+              Text(
+                text = uiState.family.parentName,
+                style = MaterialTheme.typography.titleLarge,
+                color = Color.White,
+              )
+              Text(
+                text = if (BuildConfig.DEBUG) {
+                  "${uiState.family.relationshipLabel} · Fictional demo household"
+                } else {
+                  uiState.family.relationshipLabel
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.8f),
+              )
+            }
+          }
+
+          Surface(
+            shape = MaterialTheme.shapes.medium,
+            color = Color.White.copy(alpha = 0.10f),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = "${uiState.player.displayName} (${uiState.player.jerseyNumber})",
+                  style = MaterialTheme.typography.titleSmall,
+                  color = Color.White,
+                )
+                Text(
+                  text = "${uiState.player.positionAndGrade} · Guided by ${uiState.player.coachName}",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = Color.White.copy(alpha = 0.82f),
+                )
+              }
+              if (BuildConfig.DEBUG) {
+                Spacer(modifier = Modifier.width(8.dp))
+                FictionalDemoBadge(
+                  text = "Fictional Player",
+                  onDarkBackground = true,
+                )
+              }
+            }
+          }
+        }
+      }
+
+      if (BuildConfig.DEBUG) {
+        // Fictional Demo Scenario Switcher
+        Card(
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("scenario_switcher_card"),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
+      ) {
+        Column(
+          modifier = Modifier.padding(16.dp),
+          verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = Icons.Outlined.Science,
+              contentDescription = null,
+              tint = BurntOrange,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column {
+              Text(
+                text = "Demo Scenario Switcher",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+              )
+              Text(
+                text = "Jump to any fictional state on Today and Work + Feedback.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+          }
+
+          WorkflowScenarioId.entries.forEach { scenario ->
+            val selected = scenario == activeScenario
+            Surface(
+              onClick = { onSelectScenario(scenario) },
+              modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 48.dp)
+                .testTag("scenario_${scenario.id}"),
+              shape = RoundedCornerShape(12.dp),
+              color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+              border = BorderStroke(
+                width = if (selected) 1.5.dp else 1.dp,
+                color = if (selected) BurntOrange else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+              ),
+            ) {
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+              ) {
+                Row(
+                  modifier = Modifier.weight(1f),
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Icon(
+                    imageVector = if (selected) Icons.Filled.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                    contentDescription = null,
+                    tint = if (selected) BurntOrange else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                  )
+                  Spacer(modifier = Modifier.width(10.dp))
+                  Column {
+                    Text(
+                      text = scenario.label,
+                      style = MaterialTheme.typography.titleSmall,
+                      fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                      color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                      text = "Today action: ${scenario.primaryActionLabel}",
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (uiState.demoStatusMessage != null) {
+        Surface(
+          shape = MaterialTheme.shapes.small,
+          color = MaterialTheme.colorScheme.tertiaryContainer,
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("account_demo_status_message"),
+        ) {
+          Text(
+            text = uiState.demoStatusMessage,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            modifier = Modifier.padding(12.dp),
+          )
+        }
+      }
+
+        // Reset Demo Data Action
+        OutlinedButton(
+          onClick = onResetDemoData,
+          modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp)
+            .testTag("reset_demo_button"),
+          shape = RoundedCornerShape(12.dp),
+          border = BorderStroke(1.dp, BurntOrange),
+        ) {
+          Icon(
+            imageVector = Icons.Outlined.RestartAlt,
+            contentDescription = null,
+            tint = BurntOrange,
+          )
+          Spacer(modifier = Modifier.width(8.dp))
+          Text(
+            text = "Reset Sample Demo Data",
+            style = MaterialTheme.typography.labelLarge,
+            color = BurntOrange,
+          )
+        }
+      }
+
+      // Assigned Coach Card
+      Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
+      ) {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          CoachKeithAvatar(sizeDp = 50)
+          Spacer(modifier = Modifier.width(14.dp))
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = "Assigned Coach: ${uiState.player.coachName}",
+              style = MaterialTheme.typography.titleMedium,
+              color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+              text = if (BuildConfig.DEBUG) {
+                "Responses revealed via the demo control are prewritten local sample responses for this prototype."
+              } else {
+                "Coach Keith builds your weekly plan, assigns drills, and reviews your reflections."
+              },
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+        }
+      }
+
+      if (BuildConfig.DEBUG) {
+        // Prototype Scope & Service Boundary Card
+        Card(
+          modifier = Modifier.fillMaxWidth(),
+          shape = MaterialTheme.shapes.medium,
+          colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+          border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
+        ) {
+          Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(
+                imageVector = Icons.Outlined.Info,
+                contentDescription = null,
+                tint = BurntOrange,
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(
+                text = "Prototype Scope",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+              )
+            }
+            Text(
+              text = uiState.family.scopeNotice,
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(verticalAlignment = Alignment.Top) {
+              Icon(
+                imageVector = Icons.Outlined.Storage,
+                contentDescription = null,
+                tint = NavyDeep,
+                modifier = Modifier.size(20.dp),
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(
+                text = "Local Room storage keeps Maya's active step, unfinished draft, and submitted reflections across app restarts. BallerPathRepository and BallerPathServiceGateway mark where the live Baller Path backend plugs in.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+          }
+        }
+      }
+
+      Spacer(modifier = Modifier.height(8.dp))
+    }
+  }
+}
