@@ -910,14 +910,14 @@ fun CoachFeedbackStudioSection(
         border = BorderStroke(1.dp, NavyDeep.copy(alpha = 0.45f)),
       ) {
         Column(
-          modifier = Modifier.padding(14.dp),
-          verticalArrangement = Arrangement.spacedBy(10.dp),
+          modifier = Modifier.padding(10.dp),
+          verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
           Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
           ) {
-            CoachKeithAvatar(sizeDp = 30)
+            CoachKeithAvatar(sizeDp = 28)
             Column {
               Text(
                 text = stringResource(R.string.coach_studio_eyebrow),
@@ -966,7 +966,7 @@ fun CoachFeedbackStudioSection(
                 text = statusMessage.orEmpty(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
               )
             }
           }
@@ -982,7 +982,7 @@ fun CoachFeedbackStudioSection(
               Row(
                 modifier = Modifier
                   .fillMaxWidth()
-                  .padding(horizontal = 12.dp, vertical = 8.dp),
+                  .padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
               ) {
@@ -999,7 +999,7 @@ fun CoachFeedbackStudioSection(
           FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
           ) {
             val coachRecordLabel = if (isDictatingCoachVoice) {
               "Stop On-Device Dictation"
@@ -1061,8 +1061,8 @@ fun CoachFeedbackStudioSection(
               .fillMaxWidth()
               .testTag("coach_response_input_$assignmentId"),
             label = { Text("Coach Keith's Feedback (Debug Only)") },
-            minLines = 2,
-            maxLines = 5,
+            minLines = 1,
+            maxLines = 4,
             colors = OutlinedTextFieldDefaults.colors(
               focusedBorderColor = BurntOrange,
               focusedLabelColor = BurntOrange,
@@ -1083,8 +1083,8 @@ fun CoachFeedbackStudioSection(
               .fillMaxWidth()
               .testTag("coach_next_rep_input_$assignmentId"),
             label = { Text("Try the next rep (Debug Only)") },
-            minLines = 2,
-            maxLines = 4,
+            minLines = 1,
+            maxLines = 3,
             colors = OutlinedTextFieldDefaults.colors(
               focusedBorderColor = BurntOrange,
               focusedLabelColor = BurntOrange,

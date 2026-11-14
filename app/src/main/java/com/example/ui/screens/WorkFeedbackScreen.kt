@@ -60,10 +60,15 @@ import com.example.data.model.WorkFeedbackTab
 import com.example.ui.components.CoachAudioListenButton
 import com.example.ui.components.CoachFeedbackStudioSection
 import com.example.ui.components.CoachKeithAvatar
+import com.example.ui.components.CoachKeithBackendPortalSection
 import com.example.ui.components.DevelopmentStatsChartCard
 import com.example.ui.components.FictionalDemoBadge
+import com.example.ui.components.GameTransferAndSinceWeek1Card
 import com.example.ui.components.HeadlineVisualBanner
+import com.example.ui.components.PlayerCoachMessagingSection
 import com.example.ui.components.PlayerHeaderBar
+import com.example.ui.components.TeachBackInYourWordsCard
+import com.example.ui.components.VideoCritiqueUploadAndBreakdownSection
 import com.example.ui.theme.BurntOrange
 import com.example.ui.theme.NavyDeep
 import com.example.ui.viewmodel.BallerPathUiState
@@ -80,6 +85,16 @@ fun WorkFeedbackScreen(
   onStartOrResumeAssignment: (String) -> Unit,
   onRevealSampleFeedback: (Long) -> Unit,
   onSaveCustomCoachFeedback: (reflectionId: Long, coachResponse: String, nextAdjustment: String) -> Unit = { _, _, _ -> },
+  onSubmitPracticeVideo: (videoUri: String, cameraAngleTag: String, playerNote: String) -> Unit = { _, _, _ -> },
+  onSendPlayerMessage: (String) -> Unit = {},
+  onToggleCoachPortalMode: (Boolean) -> Unit = {},
+  onPublishScopeOfWork: (title: String, objective: String, reps: String, filmAngle: String, standard: String) -> Unit = { _, _, _, _, _ -> },
+  onSaveCoachVideoCritique: (videoId: String, critique: String, timestamps: String, nextRep: String) -> Unit = { _, _, _, _ -> },
+  onSendCoachMessage: (String) -> Unit = {},
+  onSubmitTeachBack: (whatWillDoDifferently: String, whatWillNotice: String) -> Unit = { _, _ -> },
+  onCoachMarkTeachBack: (mark: String, clarifyNote: String) -> Unit = { _, _ -> },
+  onLogGameNote: (opponent: String, carriedOver: String, didntYet: String, feelLabel: String) -> Unit = { _, _, _, _ -> },
+  onCoachMarkGame: (gameId: String, coachMark: String, coachNote: String) -> Unit = { _, _, _ -> },
   modifier: Modifier = Modifier,
 ) {
   val setupStage = uiState.setupState.setupStage
@@ -285,6 +300,35 @@ fun WorkFeedbackScreen(
             stats = uiState.lastSevenDayStats,
             playerFirstName = uiState.player.firstName,
           )
+        }
+      }
+
+      if (setupStage != SetupStage.SETUP_IN_PROGRESS) {
+        val activeDrill = uiState.todayAssignment ?: uiState.assignments.first()
+        item {
+          Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            VideoCritiqueUploadAndBreakdownSection(
+              assignmentId = activeDrill.assignmentId,
+              drillTitle = activeDrill.title,
+              videoSubmissions = uiState.videoSubmissions,
+              onSubmitVideo = onSubmitPracticeVideo,
+            )
+
+            PlayerCoachMessagingSection(
+              messages = uiState.tacticalMessages,
+              activeScopeTitle = activeDrill.title,
+              onSendPlayerMessage = onSendPlayerMessage,
+            )
+
+            CoachKeithBackendPortalSection(
+              isCoachPortalMode = uiState.isCoachPortalMode,
+              onToggleCoachPortalMode = onToggleCoachPortalMode,
+              videoSubmissions = uiState.videoSubmissions,
+              onPublishScope = onPublishScopeOfWork,
+              onSaveVideoCritique = onSaveCoachVideoCritique,
+              onSendCoachMessage = onSendCoachMessage,
+            )
+          }
         }
       }
 

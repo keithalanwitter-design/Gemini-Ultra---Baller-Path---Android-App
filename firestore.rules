@@ -1,0 +1,223 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == 'keithalanwitter@gmail.com' && request.auth.token.email_verified == true) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Validation Blueprints
+    function isValidPlayerCloudProfile(data, userId) {
+      return data.userId is string && data.userId == userId && data.userId.size() <= 128 &&
+             data.playerName is string && data.playerName.size() >= 1 && data.playerName.size() <= 80 &&
+             data.jerseyNumber is string && data.jerseyNumber.size() >= 1 && data.jerseyNumber.size() <= 16 &&
+             data.positionAndGrade is string && data.positionAndGrade.size() >= 1 && data.positionAndGrade.size() <= 80 &&
+             data.activeGoal is string && data.activeGoal.size() >= 1 && data.activeGoal.size() <= 300 &&
+             data.challengeAccepted is bool &&
+             data.courtStrengths is string && data.courtStrengths.size() >= 1 && data.courtStrengths.size() <= 400 &&
+             data.completedScopesCount is int && data.completedScopesCount >= 0 && data.completedScopesCount <= 10000 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidPracticeScopeOfWork(data, userId) {
+      return data.userId is string && data.userId == userId && data.userId.size() <= 128 &&
+             data.assignmentId is string && data.assignmentId.size() >= 1 && data.assignmentId.size() <= 128 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.tacticalObjective is string && data.tacticalObjective.size() >= 1 && data.tacticalObjective.size() <= 500 &&
+             data.scopeBreakdown is string && data.scopeBreakdown.size() >= 1 && data.scopeBreakdown.size() <= 1200 &&
+             data.requiredFilmAngle is string && data.requiredFilmAngle.size() >= 1 && data.requiredFilmAngle.size() <= 200 &&
+             data.successStandard is string && data.successStandard.size() >= 1 && data.successStandard.size() <= 500 &&
+             data.durationMinutes is int && data.durationMinutes >= 1 && data.durationMinutes <= 180 &&
+             data.status is string && data.status in ['assigned', 'in_review', 'completed'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidVideoCritiqueSubmission(data, userId) {
+      return data.userId is string && data.userId == userId && data.userId.size() <= 128 &&
+             data.assignmentId is string && data.assignmentId.size() >= 1 && data.assignmentId.size() <= 128 &&
+             data.drillTitle is string && data.drillTitle.size() >= 1 && data.drillTitle.size() <= 120 &&
+             data.videoLabel is string && data.videoLabel.size() >= 1 && data.videoLabel.size() <= 240 &&
+             data.cameraAngle is string && data.cameraAngle.size() >= 1 && data.cameraAngle.size() <= 120 &&
+             data.playerObservation is string && data.playerObservation.size() >= 1 && data.playerObservation.size() <= 1200 &&
+             data.coachCritique is string && data.coachCritique.size() <= 1500 &&
+             data.filmTimestampNotes is string && data.filmTimestampNotes.size() <= 1000 &&
+             data.nextRepAdjustment is string && data.nextRepAdjustment.size() <= 600 &&
+             data.status is string && data.status in ['awaiting_coach', 'coach_reviewed'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidCoachPlayerMessage(data, userId) {
+      return data.userId is string && data.userId == userId && data.userId.size() <= 128 &&
+             data.assignmentId is string && data.assignmentId.size() >= 1 && data.assignmentId.size() <= 128 &&
+             data.senderRole is string && data.senderRole in ['player', 'parent', 'coach'] &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 80 &&
+             data.messageText is string && data.messageText.size() >= 1 && data.messageText.size() <= 1200 &&
+             data.followUpPrompt is string && data.followUpPrompt.size() <= 300 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    // 1. Player Cloud Profiles
+    match /users/{userId}/player_profiles/{profileId} {
+      allow get: if (isOwner(userId) || isAdmin()) && isValidId(userId) && isValidId(profileId);
+      allow list: if isOwner(userId) || isAdmin();
+
+      allow create: if (isOwner(userId) || isAdmin()) &&
+                       isValidId(userId) &&
+                       isValidId(profileId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'playerName', 'jerseyNumber', 'positionAndGrade',
+                         'activeGoal', 'challengeAccepted', 'courtStrengths',
+                         'completedScopesCount', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'playerName', 'jerseyNumber', 'positionAndGrade',
+                         'activeGoal', 'challengeAccepted', 'courtStrengths',
+                         'completedScopesCount', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidPlayerCloudProfile(incoming(), userId);
+
+      allow update: if (isOwner(userId) || isAdmin()) &&
+                       isValidId(userId) &&
+                       isValidId(profileId) &&
+                       isValidPlayerCloudProfile(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'playerName', 'jerseyNumber', 'positionAndGrade',
+                         'activeGoal', 'challengeAccepted', 'courtStrengths',
+                         'completedScopesCount', 'updatedAt'
+                       ]);
+
+      allow delete: if (isOwner(userId) || isAdmin()) && isValidId(userId) && isValidId(profileId);
+    }
+
+    // 2. Practice Scopes of Work
+    match /users/{userId}/practice_scopes/{scopeId} {
+      allow get: if (isOwner(userId) || isAdmin()) && isValidId(userId) && isValidId(scopeId);
+      allow list: if isOwner(userId) || isAdmin();
+
+      allow create: if (isOwner(userId) || isAdmin()) &&
+                       isValidId(userId) &&
+                       isValidId(scopeId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'assignmentId', 'title', 'tacticalObjective',
+                         'scopeBreakdown', 'requiredFilmAngle', 'successStandard',
+                         'durationMinutes', 'status', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'assignmentId', 'title', 'tacticalObjective',
+                         'scopeBreakdown', 'requiredFilmAngle', 'successStandard',
+                         'durationMinutes', 'status', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidPracticeScopeOfWork(incoming(), userId);
+
+      allow update: if (isOwner(userId) || isAdmin()) &&
+                       isValidId(userId) &&
+                       isValidId(scopeId) &&
+                       isValidPracticeScopeOfWork(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().assignmentId == existing().assignmentId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'title', 'tacticalObjective', 'scopeBreakdown',
+                         'requiredFilmAngle', 'successStandard', 'durationMinutes',
+                         'status', 'updatedAt'
+                       ]);
+
+      allow delete: if (isOwner(userId) || isAdmin()) && isValidId(userId) && isValidId(scopeId);
+    }
+
+    // 3. Video Critique Submissions
+    match /users/{userId}/video_submissions/{submissionId} {
+      allow get: if (isOwner(userId) || isAdmin()) && isValidId(userId) && isValidId(submissionId);
+      allow list: if isOwner(userId) || isAdmin();
+
+      allow create: if (isOwner(userId) || isAdmin()) &&
+                       isValidId(userId) &&
+                       isValidId(submissionId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'assignmentId', 'drillTitle', 'videoLabel',
+                         'cameraAngle', 'playerObservation', 'coachCritique',
+                         'filmTimestampNotes', 'nextRepAdjustment', 'status',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'assignmentId', 'drillTitle', 'videoLabel',
+                         'cameraAngle', 'playerObservation', 'coachCritique',
+                         'filmTimestampNotes', 'nextRepAdjustment', 'status',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidVideoCritiqueSubmission(incoming(), userId);
+
+      allow update: if (isOwner(userId) || isAdmin()) &&
+                       isValidId(userId) &&
+                       isValidId(submissionId) &&
+                       isValidVideoCritiqueSubmission(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().assignmentId == existing().assignmentId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'videoLabel', 'cameraAngle', 'playerObservation',
+                         'coachCritique', 'filmTimestampNotes', 'nextRepAdjustment',
+                         'status', 'updatedAt'
+                       ]);
+
+      allow delete: if (isOwner(userId) || isAdmin()) && isValidId(userId) && isValidId(submissionId);
+    }
+
+    // 4. Coach-Player Tactical Messages
+    match /users/{userId}/coach_messages/{messageId} {
+      allow get: if (isOwner(userId) || isAdmin()) && isValidId(userId) && isValidId(messageId);
+      allow list: if isOwner(userId) || isAdmin();
+
+      allow create: if (isOwner(userId) || isAdmin()) &&
+                       isValidId(userId) &&
+                       isValidId(messageId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'assignmentId', 'senderRole', 'senderName',
+                         'messageText', 'followUpPrompt', 'createdAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'assignmentId', 'senderRole', 'senderName',
+                         'messageText', 'followUpPrompt', 'createdAt'
+                       ]) &&
+                       isValidCoachPlayerMessage(incoming(), userId);
+
+      allow update: if false;
+      allow delete: if (isOwner(userId) || isAdmin()) && isValidId(userId) && isValidId(messageId);
+    }
+  }
+}

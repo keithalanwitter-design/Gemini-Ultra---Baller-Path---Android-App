@@ -1,0 +1,276 @@
+{
+  "entities": {
+    "PlayerCloudProfile": {
+      "title": "PlayerCloudProfile",
+      "description": "Stores a player's tactical profile card, active goal check-in, challenge commitment, and development progress.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The UID of the authenticated player/parent account."
+        },
+        "playerName": {
+          "type": "string",
+          "description": "The player's display name."
+        },
+        "jerseyNumber": {
+          "type": "string",
+          "description": "The player's jersey number (e.g., #14)."
+        },
+        "positionAndGrade": {
+          "type": "string",
+          "description": "The player's court position and grade level."
+        },
+        "activeGoal": {
+          "type": "string",
+          "description": "The player's current tactical goal selected during welcome check-in."
+        },
+        "challengeAccepted": {
+          "type": "boolean",
+          "description": "Whether the player accepted today's Coach Keith tactical challenge."
+        },
+        "courtStrengths": {
+          "type": "string",
+          "description": "Summary of the player's tactical court strengths."
+        },
+        "completedScopesCount": {
+          "type": "integer",
+          "description": "Count of completed scopes of work."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was created (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was last updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "playerName",
+        "jerseyNumber",
+        "positionAndGrade",
+        "activeGoal",
+        "challengeAccepted",
+        "courtStrengths",
+        "completedScopesCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PracticeScopeOfWork": {
+      "title": "PracticeScopeOfWork",
+      "description": "Represents a comprehensive tactical practice plan and scope of work assigned by Coach Keith.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The UID of the player household this scope of work belongs to."
+        },
+        "assignmentId": {
+          "type": "string",
+          "description": "Identifier linking to the drill assignment."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the tactical practice plan."
+        },
+        "tacticalObjective": {
+          "type": "string",
+          "description": "Core game-situation objective for this scope of work."
+        },
+        "scopeBreakdown": {
+          "type": "string",
+          "description": "Detailed rep-by-rep and phase breakdown of the scope of work."
+        },
+        "requiredFilmAngle": {
+          "type": "string",
+          "description": "Recommended camera angle for uploading player practice film."
+        },
+        "successStandard": {
+          "type": "string",
+          "description": "Coach Keith's measurable standard for completing the scope."
+        },
+        "durationMinutes": {
+          "type": "integer",
+          "description": "Planned duration in minutes."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["assigned", "in_review", "completed"],
+          "description": "Lifecycle status of the scope of work."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "assignmentId",
+        "title",
+        "tacticalObjective",
+        "scopeBreakdown",
+        "requiredFilmAngle",
+        "successStandard",
+        "durationMinutes",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "VideoCritiqueSubmission": {
+      "title": "VideoCritiqueSubmission",
+      "description": "Represents a player's uploaded practice video metadata, reflection, and Coach Keith's tactical film critique.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The UID of the player who submitted the video clip."
+        },
+        "assignmentId": {
+          "type": "string",
+          "description": "The assignment ID associated with this video submission."
+        },
+        "drillTitle": {
+          "type": "string",
+          "description": "The title of the drill."
+        },
+        "videoLabel": {
+          "type": "string",
+          "description": "Display name or clip summary of the selected video."
+        },
+        "cameraAngle": {
+          "type": "string",
+          "description": "Court camera angle tag (e.g., Wing / Corner Read)."
+        },
+        "playerObservation": {
+          "type": "string",
+          "description": "What the player noticed and decided during the film rep."
+        },
+        "coachCritique": {
+          "type": "string",
+          "description": "Coach Keith's tactical critique of the player's video."
+        },
+        "filmTimestampNotes": {
+          "type": "string",
+          "description": "Timestamped breakdown notes from Coach Keith (e.g., [0:04] Footwork, [0:09] Help read)."
+        },
+        "nextRepAdjustment": {
+          "type": "string",
+          "description": "Coach Keith's specific adjustment for the next rep."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["awaiting_coach", "coach_reviewed"],
+          "description": "Review status of the video submission."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when submitted (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "assignmentId",
+        "drillTitle",
+        "videoLabel",
+        "cameraAngle",
+        "playerObservation",
+        "coachCritique",
+        "filmTimestampNotes",
+        "nextRepAdjustment",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CoachPlayerMessage": {
+      "title": "CoachPlayerMessage",
+      "description": "Represents a message in the two-way tactical communication thread between the player/parent and Coach Keith.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The UID of the player household thread owner."
+        },
+        "assignmentId": {
+          "type": "string",
+          "description": "The assignment ID or 'general' topic this message is attached to."
+        },
+        "senderRole": {
+          "type": "string",
+          "enum": ["player", "parent", "coach"],
+          "description": "Role of the message author."
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Display name of the sender."
+        },
+        "messageText": {
+          "type": "string",
+          "description": "Tactical message content."
+        },
+        "followUpPrompt": {
+          "type": "string",
+          "description": "Contextual next-step prompt suggested after this message."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when sent (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "assignmentId",
+        "senderRole",
+        "senderName",
+        "messageText",
+        "followUpPrompt",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/player_profiles/{profileId}": {
+      "schema": {
+        "$ref": "#/entities/PlayerCloudProfile"
+      },
+      "description": "Stores the player's tactical profile card, goal check-in, and challenge state."
+    },
+    "/users/{userId}/practice_scopes/{scopeId}": {
+      "schema": {
+        "$ref": "#/entities/PracticeScopeOfWork"
+      },
+      "description": "Stores tactical practice plans and scopes of work for the player."
+    },
+    "/users/{userId}/video_submissions/{submissionId}": {
+      "schema": {
+        "$ref": "#/entities/VideoCritiqueSubmission"
+      },
+      "description": "Stores player practice video uploads and Coach Keith's tactical film critiques."
+    },
+    "/users/{userId}/coach_messages/{messageId}": {
+      "schema": {
+        "$ref": "#/entities/CoachPlayerMessage"
+      },
+      "description": "Stores two-way tactical messages between the player/parent and Coach Keith."
+    }
+  }
+}

@@ -29,7 +29,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.data.model.BallerPathLoopStage
 import com.example.data.model.WorkFeedbackTab
+import com.example.ui.auth.rememberBallerPathCloudController
 import com.example.ui.components.BallerPathBottomBar
 import com.example.ui.components.BallerPathNavRail
 import com.example.ui.components.TopLevelTab
@@ -79,6 +81,8 @@ fun BallerPathApp(
     )
     return
   }
+
+  val cloudController = rememberBallerPathCloudController(viewModel = viewModel)
 
   val navController = rememberNavController()
   val backStackEntry by navController.currentBackStackEntryAsState()
@@ -179,6 +183,53 @@ fun BallerPathApp(
             TodayScreen(
               uiState = uiState,
               onPrimaryAction = ::handleTodayPrimaryAction,
+              onSelectGoal = { goal ->
+                viewModel.selectWelcomeGoal(goal)
+                cloudController.syncGoalAndChallengeToCloud(
+                  playerName = uiState.player.displayName,
+                  jerseyNumber = uiState.player.jerseyNumber,
+                  positionAndGrade = uiState.player.positionAndGrade,
+                  activeGoal = goal,
+                  challengeQuestion = uiState.welcomeGoalState.challengeQuestion,
+                  challengeAccepted = uiState.welcomeGoalState.isChallengeAccepted,
+                  streakCount = uiState.welcomeGoalState.completedMilestonesCount,
+                )
+              },
+              onAcceptChallenge = {
+                viewModel.acceptWelcomeChallenge()
+                cloudController.syncGoalAndChallengeToCloud(
+                  playerName = uiState.player.displayName,
+                  jerseyNumber = uiState.player.jerseyNumber,
+                  positionAndGrade = uiState.player.positionAndGrade,
+                  activeGoal = uiState.welcomeGoalState.selectedGoal,
+                  challengeQuestion = uiState.welcomeGoalState.challengeQuestion,
+                  challengeAccepted = true,
+                  streakCount = uiState.welcomeGoalState.completedMilestonesCount + 1,
+                )
+              },
+              onOpenFilmAndMessages = {
+                navigateToTab(TopLevelTab.WORK_FEEDBACK)
+              },
+              onSelectLoopStage = { stage ->
+                when (stage) {
+                  BallerPathLoopStage.FOCUS -> navigateToTab(TopLevelTab.PLAN)
+                  BallerPathLoopStage.PRACTICE -> handleTodayPrimaryAction()
+                  BallerPathLoopStage.REFLECT -> {
+                    selectedWorkTab = WorkFeedbackTab.AWAITING_COACH
+                    navigateToTab(TopLevelTab.WORK_FEEDBACK)
+                  }
+                  BallerPathLoopStage.ADJUST -> {
+                    selectedWorkTab = WorkFeedbackTab.COACH_RESPONDED
+                    navigateToTab(TopLevelTab.WORK_FEEDBACK)
+                  }
+                }
+              },
+              onSelectRoughWeekChoice = { choice ->
+                viewModel.selectRoughWeekChoice(choice)
+              },
+              onSubmitStuckNote = { happened, want, feeling ->
+                viewModel.submitStuckPrivateNote(happened, want, feeling)
+              },
             )
           }
           composable(TopLevelTab.PLAN.route) {
@@ -187,9 +238,36 @@ fun BallerPathApp(
               onOpenPractice = { assignmentId, forceRestart ->
                 openPracticeFlow(assignmentId = assignmentId, forceRestart = forceRestart)
               },
+              onSelectGradeBand = { gradeBand ->
+                viewModel.selectGradeBandPathway(gradeBand)
+              },
+              onSelectProgramTrack = { track ->
+                viewModel.selectTrainingProgramTrack(track)
+              },
+              onSaveCheckInPrep = { checkInType, agendaTopics, confidenceRating, familyQuestionNote ->
+                viewModel.saveCheckInPreparation(
+                  checkInType = checkInType,
+                  agendaTopics = agendaTopics,
+                  confidenceRating = confidenceRating,
+                  familyQuestionNote = familyQuestionNote,
+                )
+              },
+              onSubmitTeachBack = { change, notice ->
+                viewModel.submitPlayerTeachBack(change, notice)
+              },
+              onCoachMarkTeachBack = { mark, clarifyNote ->
+                viewModel.markCoachTeachBack(mark, clarifyNote)
+              },
+              onLogGameNote = { opponent, carried, missed, feel ->
+                viewModel.logGameTransferNote(opponent, carried, missed, feel)
+              },
+              onCoachMarkGame = { gameId, mark, note ->
+                viewModel.markCoachGameNote(gameId, mark, note)
+              },
             )
           }
           composable(TopLevelTab.WORK_FEEDBACK.route) {
+            val activeDrill = uiState.todayAssignment ?: uiState.assignments.first()
             WorkFeedbackScreen(
               uiState = uiState,
               selectedTab = selectedWorkTab,
@@ -210,9 +288,70 @@ fun BallerPathApp(
                   selectedWorkTab = WorkFeedbackTab.COACH_RESPONDED
                 }
               },
+              onSubmitPracticeVideo = { videoUri, cameraAngleTag, playerNote ->
+                val submitted = viewModel.submitPracticeVideo(
+                  assignmentId = activeDrill.assignmentId,
+                  drillTitle = activeDrill.title,
+                  videoUri = videoUri,
+                  cameraAngleTag = cameraAngleTag,
+                  playerNote = playerNote,
+                )
+                cloudController.syncVideoSubmissionToCloud(submitted)
+              },
+              onSendPlayerMessage = { text ->
+                val msg = viewModel.sendTacticalMessage(
+                  senderRole = "player",
+                  text = text,
+                  relatedTitle = activeDrill.title,
+                )
+                if (msg != null) cloudController.syncMessageToCloud(msg)
+              },
+              onToggleCoachPortalMode = { enabled ->
+                viewModel.setCoachPortalMode(enabled)
+              },
+              onPublishScopeOfWork = { title, objective, reps, filmAngle, standard ->
+                val spec = viewModel.publishNewScopeOfWork(
+                  title = title,
+                  tacticalObjective = objective,
+                  repBreakdown = reps,
+                  requiredFilmAngle = filmAngle,
+                  successStandard = standard,
+                )
+                if (spec != null) cloudController.syncNewScopeToCloud(spec)
+              },
+              onSaveCoachVideoCritique = { videoId, critique, timestamps, nextRep ->
+                val updated = viewModel.saveCoachVideoCritique(
+                  videoId = videoId,
+                  coachCritique = critique,
+                  timestampNotes = timestamps,
+                  nextRepAdjustment = nextRep,
+                )
+                if (updated != null) cloudController.syncVideoCritiqueToCloud(updated)
+              },
+              onSendCoachMessage = { reply ->
+                val msg = viewModel.sendTacticalMessage(
+                  senderRole = "coach",
+                  text = reply,
+                  relatedTitle = activeDrill.title,
+                )
+                if (msg != null) cloudController.syncMessageToCloud(msg)
+              },
+              onSubmitTeachBack = { change, notice ->
+                viewModel.submitPlayerTeachBack(change, notice)
+              },
+              onCoachMarkTeachBack = { mark, clarifyNote ->
+                viewModel.markCoachTeachBack(mark, clarifyNote)
+              },
+              onLogGameNote = { opponent, carried, missed, feel ->
+                viewModel.logGameTransferNote(opponent, carried, missed, feel)
+              },
+              onCoachMarkGame = { gameId, mark, note ->
+                viewModel.markCoachGameNote(gameId, mark, note)
+              },
             )
           }
           composable(TopLevelTab.ACCOUNT.route) {
+            val activeDrill = uiState.todayAssignment ?: uiState.assignments.first()
             AccountScreen(
               uiState = uiState,
               onSelectScenario = { scenario -> viewModel.applyDemoScenario(scenario) },
@@ -220,9 +359,44 @@ fun BallerPathApp(
                 viewModel.setSetupState(stage, hasGeneral)
               },
               onResetDemoData = { viewModel.resetDemoData() },
+              currentUser = cloudController.currentUser,
+              authErrorMessage = cloudController.authErrorMessage,
+              onAuthError = cloudController.onAuthError,
+              onSignOutSuccess = { viewModel.setCoachPortalMode(false) },
+              onToggleCoachPortalMode = { enabled ->
+                viewModel.setCoachPortalMode(enabled)
+              },
+              onPublishScopeOfWork = { title, objective, reps, filmAngle, standard ->
+                val spec = viewModel.publishNewScopeOfWork(
+                  title = title,
+                  tacticalObjective = objective,
+                  repBreakdown = reps,
+                  requiredFilmAngle = filmAngle,
+                  successStandard = standard,
+                )
+                if (spec != null) cloudController.syncNewScopeToCloud(spec)
+              },
+              onSaveCoachVideoCritique = { videoId, critique, timestamps, nextRep ->
+                val updated = viewModel.saveCoachVideoCritique(
+                  videoId = videoId,
+                  coachCritique = critique,
+                  timestampNotes = timestamps,
+                  nextRepAdjustment = nextRep,
+                )
+                if (updated != null) cloudController.syncVideoCritiqueToCloud(updated)
+              },
+              onSendCoachMessage = { reply ->
+                val msg = viewModel.sendTacticalMessage(
+                  senderRole = "coach",
+                  text = reply,
+                  relatedTitle = activeDrill.title,
+                )
+                if (msg != null) cloudController.syncMessageToCloud(msg)
+              },
             )
           }
           composable(ROUTE_PRACTICE_FLOW) {
+            val activeDrill = uiState.activePracticeAssignment
             PracticeFlowScreen(
               uiState = uiState,
               onNavigateBack = {
@@ -247,6 +421,16 @@ fun BallerPathApp(
                     restoreState = false
                   }
                 }
+              },
+              onSubmitPracticeVideo = { videoUri, cameraAngleTag, playerNote ->
+                val submitted = viewModel.submitPracticeVideo(
+                  assignmentId = activeDrill.assignmentId,
+                  drillTitle = activeDrill.title,
+                  videoUri = videoUri,
+                  cameraAngleTag = cameraAngleTag,
+                  playerNote = playerNote,
+                )
+                cloudController.syncVideoSubmissionToCloud(submitted)
               },
             )
           }

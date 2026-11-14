@@ -45,13 +45,20 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
 import com.example.R
+import com.example.data.model.GradeBandPathway
 import com.example.data.model.PlanSession
 import com.example.data.model.SessionStatus
 import com.example.data.model.SetupStage
+import com.example.data.model.TrainingProgramTrack
+import com.example.ui.components.BroaderReachPathwayAndEvaluationCard
 import com.example.ui.components.CoachKeithAvatar
+import com.example.ui.components.CoachKeithCheckInConsultationCard
 import com.example.ui.components.FictionalDemoBadge
+import com.example.ui.components.GameTransferAndSinceWeek1Card
 import com.example.ui.components.HeadlineVisualBanner
 import com.example.ui.components.PlayerHeaderBar
+import com.example.ui.components.PracticeScopeOfWorkCard
+import com.example.ui.components.TeachBackInYourWordsCard
 import com.example.ui.theme.BurntOrange
 import com.example.ui.theme.NavyDeep
 import com.example.ui.viewmodel.BallerPathUiState
@@ -61,6 +68,13 @@ import com.example.ui.viewmodel.BallerPathUiState
 fun PlanScreen(
   uiState: BallerPathUiState,
   onOpenPractice: (assignmentId: String, forceRestart: Boolean) -> Unit,
+  onSelectGradeBand: (GradeBandPathway) -> Unit = {},
+  onSelectProgramTrack: (TrainingProgramTrack) -> Unit = {},
+  onSaveCheckInPrep: (checkInType: String, agendaTopics: List<String>, confidenceRating: Int, familyQuestionNote: String) -> Unit = { _, _, _, _ -> },
+  onSubmitTeachBack: (whatWillDoDifferently: String, whatWillNotice: String) -> Unit = { _, _ -> },
+  onCoachMarkTeachBack: (mark: String, clarifyNote: String) -> Unit = { _, _ -> },
+  onLogGameNote: (opponent: String, carriedOver: String, didntYet: String, feelLabel: String) -> Unit = { _, _, _, _ -> },
+  onCoachMarkGame: (gameId: String, coachMark: String, coachNote: String) -> Unit = { _, _, _ -> },
   modifier: Modifier = Modifier,
 ) {
   val scrollState = rememberScrollState()
@@ -294,6 +308,49 @@ fun PlanScreen(
               },
             )
           }
+
+          Text(
+            text = "Tactical Scopes of Work · Rep & Film Specifications",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.testTag("plan_scopes_of_work_header"),
+          )
+
+          uiState.practiceScopes.forEach { scope ->
+            PracticeScopeOfWorkCard(
+              scope = scope,
+              onStartScope = scope.assignmentId?.let { aId ->
+                { onOpenPractice(aId, false) }
+              },
+            )
+          }
+
+          BroaderReachPathwayAndEvaluationCard(
+            selectedGradeBand = uiState.welcomeGoalState.gradeBand,
+            selectedProgramTrack = uiState.welcomeGoalState.programTrack,
+            onSelectGradeBand = onSelectGradeBand,
+            onSelectProgramTrack = onSelectProgramTrack,
+          )
+
+          CoachKeithCheckInConsultationCard(
+            checkInState = uiState.welcomeGoalState.checkInState,
+            onSaveCheckInPrep = onSaveCheckInPrep,
+          )
+
+          TeachBackInYourWordsCard(
+            teachBackEntry = uiState.welcomeGoalState.teachBackEntry,
+            isCoachMode = uiState.isCoachPortalMode,
+            onSubmitTeachBack = onSubmitTeachBack,
+            onCoachMarkTeachBack = onCoachMarkTeachBack,
+          )
+
+          GameTransferAndSinceWeek1Card(
+            gameNotes = uiState.welcomeGoalState.gameTransferNotes,
+            firstLookState = uiState.welcomeGoalState.firstLookAndCycle,
+            isCoachMode = uiState.isCoachPortalMode,
+            onLogGameNote = onLogGameNote,
+            onCoachMarkGame = onCoachMarkGame,
+          )
         }
       }
 

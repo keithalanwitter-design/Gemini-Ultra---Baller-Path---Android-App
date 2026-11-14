@@ -54,12 +54,18 @@ import com.example.BuildConfig
 import com.example.R
 import com.example.data.model.SetupStage
 import com.example.data.model.WorkflowScenarioId
+import com.example.ui.auth.CloudSyncAuthBannerCard
 import com.example.ui.components.CoachKeithAvatar
+import com.example.ui.components.CoachKeithBackendPortalSection
 import com.example.ui.components.FictionalDemoBadge
+import com.example.ui.components.ParentSundayDigestAndRolesCard
+import com.example.ui.components.PlayerTacticalProfileCard
 import com.example.ui.components.PrivacyPolicyLinkCard
+import com.example.ui.components.WebsiteAppStreamlinedAuditCard
 import com.example.ui.theme.BurntOrange
 import com.example.ui.theme.NavyDeep
 import com.example.ui.viewmodel.BallerPathUiState
+import com.google.firebase.auth.FirebaseUser
 
 @Composable
 fun AccountScreen(
@@ -67,6 +73,14 @@ fun AccountScreen(
   onSelectScenario: (WorkflowScenarioId) -> Unit,
   onSelectSetupState: (SetupStage, Boolean) -> Unit,
   onResetDemoData: () -> Unit,
+  currentUser: FirebaseUser? = null,
+  authErrorMessage: String? = null,
+  onAuthError: (String?) -> Unit = {},
+  onSignOutSuccess: () -> Unit = {},
+  onToggleCoachPortalMode: (Boolean) -> Unit = {},
+  onPublishScopeOfWork: (title: String, objective: String, reps: String, filmAngle: String, standard: String) -> Unit = { _, _, _, _, _ -> },
+  onSaveCoachVideoCritique: (videoId: String, critique: String, timestamps: String, nextRep: String) -> Unit = { _, _, _, _ -> },
+  onSendCoachMessage: (String) -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   val scrollState = rememberScrollState()
@@ -453,6 +467,38 @@ fun AccountScreen(
           }
         }
       }
+
+      PlayerTacticalProfileCard(
+        player = uiState.player,
+        welcomeState = uiState.welcomeGoalState,
+        completedScopesCount = uiState.practiceScopes.size,
+        videoCount = uiState.videoSubmissions.size,
+        critiquedVideoCount = uiState.videoSubmissions.count { it.isCritiqued },
+        messagesCount = uiState.tacticalMessages.size,
+      )
+
+      CloudSyncAuthBannerCard(
+        currentUser = currentUser,
+        isCoachMode = uiState.isCoachPortalMode,
+        onToggleCoachMode = onToggleCoachPortalMode,
+        onAuthSuccess = { onAuthError(null) },
+        onSignedOut = onSignOutSuccess,
+      )
+
+      CoachKeithBackendPortalSection(
+        isCoachPortalMode = uiState.isCoachPortalMode,
+        onToggleCoachPortalMode = onToggleCoachPortalMode,
+        videoSubmissions = uiState.videoSubmissions,
+        onPublishScope = onPublishScopeOfWork,
+        onSaveVideoCritique = onSaveCoachVideoCritique,
+        onSendCoachMessage = onSendCoachMessage,
+      )
+
+      ParentSundayDigestAndRolesCard(
+        firstLookState = uiState.welcomeGoalState.firstLookAndCycle,
+      )
+
+      WebsiteAppStreamlinedAuditCard()
 
       // Privacy & Parent Consent Card (always shown in pilot & Play builds)
       Card(

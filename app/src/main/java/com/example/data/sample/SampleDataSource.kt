@@ -8,10 +8,13 @@ import com.example.data.model.DevelopmentPlan
 import com.example.data.model.PlanSession
 import com.example.data.model.PlayerProfile
 import com.example.data.model.PracticeReflection
+import com.example.data.model.PracticeScopeSpec
 import com.example.data.model.PracticeStep
 import com.example.data.model.SessionStatus
 import com.example.data.model.SimulatedFamilyProfile
+import com.example.data.model.TacticalChatMessage
 import com.example.data.model.TodayFocus
+import com.example.data.model.VideoFilmSubmission
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -433,4 +436,127 @@ object SampleDataSource {
       )
     }
   }
+
+  val tacticalGoalOptions = listOf(
+    "Create clean passing angles & hold corner spacing for 1.5s",
+    "Read the help defender's chest before the ball-handler touches the paint",
+    "Arrive on balance with hands ready before every kick-out pass",
+    "Call out weak-side spacing windows out loud on every rep",
+  )
+
+  val defaultPracticeScopes = listOf(
+    PracticeScopeSpec(
+      scopeId = "scope_w2_d1",
+      sessionId = "w2_d1",
+      assignmentId = null,
+      title = "Target Pass & Eyes Up",
+      weekDayBadge = "WEEK 2 · DAY 1 · COMPLETED SCOPE",
+      durationMinutes = 7,
+      tacticalObjective = "Eliminate head-down catches so you spot early weak-side cutters before the defense recovers.",
+      repBreakdown = "Phase 1 (2m): 15 crisp chest/bounce passes to target • Phase 2 (3m): Catch-and-chin-lift scan calls • Phase 3 (2m): Live decision read off ball reversal.",
+      requiredFilmAngle = "Half-Court High Slot Angle — show passer's eyes and weak-side corner.",
+      successStandard = "Chin rises on the catch on 9 of 10 reps; zero rushed passes into traffic.",
+      status = "Completed & Critiqued",
+    ),
+    PracticeScopeSpec(
+      scopeId = "scope_w2_d3",
+      sessionId = "w2_d3",
+      assignmentId = ASSIGNMENT_PASS_LOOK_DECIDE,
+      title = "Pass, Look, Decide",
+      weekDayBadge = "WEEK 2 · DAY 3 · ACTIVE SCOPE OF WORK",
+      durationMinutes = 8,
+      tacticalObjective = "Read the teammate's first dribble and help defender's stance to choose between holding spacing or cutting cleanly.",
+      repBreakdown = "Step 1 (2m): Pass & square vision to paint • Step 2 (3m): Read driver vs. help chest • Step 3 (3m): Hold wide kick-out window or 45° rim cut (12 game-speed reps).",
+      requiredFilmAngle = "Wing / 45° Slot Camera — keep passer, driving lane, and help defender in frame.",
+      successStandard = "Explain what you noticed in the lane and choose the action that keeps two defenders occupied.",
+      status = "Active Today",
+    ),
+    PracticeScopeSpec(
+      scopeId = "scope_w2_d5",
+      sessionId = "w2_d5",
+      assignmentId = ASSIGNMENT_CORNER_RELOCATION,
+      title = "Corner Relocation Read",
+      weekDayBadge = "WEEK 2 · DAY 5 · UPCOMING SCOPE OF WORK",
+      durationMinutes = 8,
+      tacticalObjective = "Punish help defenders who turn their head toward the paint by drifting into a clean corner passing window.",
+      repBreakdown = "Step 1 (2m): First-step paint trigger read • Step 2 (3m): Two-step slide to corner sightline • Step 3 (3m): Low-hip catch-ready footwork into shot or extra pass.",
+      requiredFilmAngle = "Baseline / Corner Angle — capture footwork timing as the driver touches the paint.",
+      successStandard = "Feet set and hands target-ready before the driver's second foot hits the paint.",
+      status = "Ready Next",
+    ),
+    PracticeScopeSpec(
+      scopeId = "scope_w2_d7",
+      sessionId = "w2_d7",
+      assignmentId = null,
+      title = "Closeout Split & Finish",
+      weekDayBadge = "WEEK 2 · DAY 7 · UPCOMING SCOPE OF WORK",
+      durationMinutes = 10,
+      tacticalObjective = "Attack unbalanced closeouts with a single decisive first step without drifting laterally.",
+      repBreakdown = "Phase 1 (3m): High-hand vs. low-hand read • Phase 2 (4m): Hip-to-hip rip-through & 1-dribble attack • Phase 3 (3m): Two-foot paint stop vs. rim finish.",
+      requiredFilmAngle = "Top-of-Key Wide Angle — show closeout defender's feet and first dribble.",
+      successStandard = "Beat the closeout hip on dribble 1 while keeping eyes on help-side tag.",
+      status = "Scheduled",
+    ),
+  )
+
+  fun defaultVideoSubmissions(nowMillis: Long = System.currentTimeMillis()): List<VideoFilmSubmission> =
+    listOf(
+      VideoFilmSubmission(
+        videoId = "vid_seed_w2_d1",
+        assignmentId = "w2_d1_target_pass",
+        drillTitle = "Target Pass & Eyes Up",
+        videoUri = "content://com.ballerpath.app/sample_film/w2_d1_wing_angle.mp4",
+        cameraAngleTag = "Wing / Corner Read (0:18)",
+        durationLabel = "0:18 · 1080p Court Clip",
+        playerNote = "Watched the nail defender turn his shoulders on rep 4 before I slid wide.",
+        status = "critiqued",
+        coachCritique = "Coach Keith Film Breakdown: Your chin came up immediately on the release, Maya. Because you saw the nail defender sink early, your two-step slide created a clean passing lane.",
+        timestampNotes = "[0:04] Crisp two-hand release with eyes already scanning the nail • [0:09] Great wide base as you relocate outside the defender's peripheral vision • [0:14] Hands stayed loaded at chest height.",
+        nextRepAdjustment = "On your next clip, hold your corner spot for a full one-count before lifting back to the wing.",
+        createdAtMillis = nowMillis - 36L * 60L * 60L * 1000L,
+      ),
+      VideoFilmSubmission(
+        videoId = "vid_seed_pass_look",
+        assignmentId = ASSIGNMENT_PASS_LOOK_DECIDE,
+        drillTitle = "Pass, Look, Decide",
+        videoUri = "content://com.ballerpath.app/sample_film/w2_d3_slot_read.mp4",
+        cameraAngleTag = "Top of Key Drive Read (0:22)",
+        durationLabel = "0:22 · Court Practice Clip",
+        playerNote = "Uploaded my 3-rep set from the right wing—tried not to crowd the driving lane.",
+        status = "awaiting_critique",
+        coachCritique = "",
+        timestampNotes = "",
+        nextRepAdjustment = "",
+        createdAtMillis = nowMillis - 2L * 60L * 60L * 1000L,
+      ),
+    )
+
+  fun defaultTacticalMessages(nowMillis: Long = System.currentTimeMillis()): List<TacticalChatMessage> =
+    listOf(
+      TacticalChatMessage(
+        messageId = "msg_1",
+        senderRole = "coach",
+        senderName = "Coach Keith",
+        text = "Welcome to Week 2, Maya and Avery! For 'Pass, Look, Decide', focus on pausing a half-beat after you pass so you read whether the help defender steps into the paint.",
+        relatedTitle = "Pass, Look, Decide · Scope Brief",
+        createdAtMillis = nowMillis - 18L * 60L * 60L * 1000L,
+      ),
+      TacticalChatMessage(
+        messageId = "msg_2",
+        senderRole = "player",
+        senderName = "Maya Brooks (#14)",
+        text = "Got it Coach Keith! When my teammate drives baseline instead of middle, should I drift to the opposite slot or stay high at the top of the key?",
+        relatedTitle = "Pass, Look, Decide · Spacing Read",
+        createdAtMillis = nowMillis - 6L * 60L * 60L * 1000L,
+      ),
+      TacticalChatMessage(
+        messageId = "msg_3",
+        senderRole = "coach",
+        senderName = "Coach Keith",
+        text = "Great tactical question, Maya. On a baseline drive, slide into the high slot right behind the ball-handler's vision—that gives them a safety outlet if the big steps up. Film 3 reps of that read today!",
+        relatedTitle = "Pass, Look, Decide · Coach Reply",
+        createdAtMillis = nowMillis - 4L * 60L * 60L * 1000L,
+      ),
+    )
 }
+

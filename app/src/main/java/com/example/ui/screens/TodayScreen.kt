@@ -51,12 +51,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
 import com.example.R
+import com.example.data.model.BallerPathLoopStage
+import com.example.data.model.RoughWeekChoice
 import com.example.data.model.SetupStage
 import com.example.data.model.WorkflowScenarioId
 import com.example.ui.components.CoachKeithAvatar
 import com.example.ui.components.FictionalDemoBadge
+import com.example.ui.components.FirstLookSessionAndPaceCard
+import com.example.ui.components.FourStageCoachingLoopCard
 import com.example.ui.components.HeadlineVisualBanner
+import com.example.ui.components.InteractiveCongratulationsCard
 import com.example.ui.components.PlayerHeaderBar
+import com.example.ui.components.PlayerTacticalProfileCard
+import com.example.ui.components.WelcomeGoalChallengeCard
 import com.example.ui.theme.BurntOrange
 import com.example.ui.theme.BurntOrangeTint
 import com.example.ui.theme.NavyDeep
@@ -69,6 +76,12 @@ import com.example.ui.viewmodel.BallerPathUiState
 fun TodayScreen(
   uiState: BallerPathUiState,
   onPrimaryAction: () -> Unit,
+  onSelectGoal: (String) -> Unit = {},
+  onAcceptChallenge: () -> Unit = {},
+  onOpenFilmAndMessages: () -> Unit = {},
+  onSelectLoopStage: (BallerPathLoopStage) -> Unit = {},
+  onSelectRoughWeekChoice: (RoughWeekChoice) -> Unit = {},
+  onSubmitStuckNote: (whatHappened: String, whatWouldHelp: String, howFeeling: String) -> Unit = { _, _, _ -> },
   modifier: Modifier = Modifier,
 ) {
   val scrollState = rememberScrollState()
@@ -120,6 +133,41 @@ fun TodayScreen(
           )
         }
       }
+
+      FourStageCoachingLoopCard(
+        activeStage = uiState.activeLoopStage,
+        onSelectStageAction = onSelectLoopStage,
+      )
+
+      FirstLookSessionAndPaceCard(
+        firstLookState = uiState.welcomeGoalState.firstLookAndCycle,
+        roughWeekChoice = uiState.welcomeGoalState.roughWeekChoice,
+        stuckNote = uiState.welcomeGoalState.stuckNote,
+        onSelectRoughWeekChoice = onSelectRoughWeekChoice,
+        onSubmitStuckNote = onSubmitStuckNote,
+      )
+
+      WelcomeGoalChallengeCard(
+        playerFirstName = uiState.player.firstName,
+        welcomeState = uiState.welcomeGoalState,
+        onSelectGoal = onSelectGoal,
+        onAcceptChallenge = onAcceptChallenge,
+      )
+
+      InteractiveCongratulationsCard(
+        welcomeState = uiState.welcomeGoalState,
+        onJumpToFilmAndMessages = onOpenFilmAndMessages,
+        onStartPrimaryScope = onPrimaryAction,
+      )
+
+      PlayerTacticalProfileCard(
+        player = uiState.player,
+        welcomeState = uiState.welcomeGoalState,
+        completedScopesCount = uiState.practiceScopes.size,
+        videoCount = uiState.videoSubmissions.size,
+        critiquedVideoCount = uiState.videoSubmissions.count { it.isCritiqued },
+        messagesCount = uiState.tacticalMessages.size,
+      )
 
       HeadlineVisualBanner(
         drawableRes = R.drawable.img_headline_one_priority,
