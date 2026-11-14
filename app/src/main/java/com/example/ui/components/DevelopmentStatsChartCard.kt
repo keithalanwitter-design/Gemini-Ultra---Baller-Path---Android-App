@@ -62,7 +62,6 @@ import com.example.ui.theme.NavyDeep
 import com.example.ui.theme.NavyPrimary
 import com.example.ui.theme.OutlineWarm
 import com.example.ui.theme.SuccessGreen
-import kotlin.math.ceil
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -85,22 +84,21 @@ fun DevelopmentStatsChartCard(
   val safeSelectedIndex = selectedDayIndex.coerceIn(0, stats.lastIndex)
   val selectedDay = stats[safeSelectedIndex]
 
-  // Only real submitted work is included in 7-Day Total, Best Day, Active Days, and bar heights.
-  val loggedValues = remember(stats) {
-    stats.map { it.practiceMinutes }
+  // Only real submitted check-ins are included in 7-Day Total, Best Day, Active Days, and bar heights.
+  // Never estimates practice minutes from prescribed drill duration.
+  val loggedCounts = remember(stats) {
+    stats.map { it.loggedCheckIns }
   }
-  val totalLoggedMinutes = remember(loggedValues) { loggedValues.sum() }
-  val activeDays = remember(stats) { stats.count { it.hasLiveSubmission && it.practiceMinutes > 0 } }
-  val bestDayMinutes = remember(loggedValues) { loggedValues.maxOrNull() ?: 0 }
-  val chartCeiling = remember(bestDayMinutes) {
-    val step = 5
-    val rawMax = bestDayMinutes.coerceAtLeast(10)
-    (ceil(rawMax / step.toFloat()).toInt() * step).coerceAtLeast(10)
+  val totalLoggedCheckIns = remember(loggedCounts) { loggedCounts.sum() }
+  val activeDays = remember(stats) { stats.count { it.hasLiveSubmission && it.loggedCheckIns > 0 } }
+  val bestDayCheckIns = remember(loggedCounts) { loggedCounts.maxOrNull() ?: 0 }
+  val chartCeiling = remember(bestDayCheckIns) {
+    bestDayCheckIns.coerceAtLeast(3)
   }
 
   val baseChartDesc = stringResource(R.string.cd_dev_stats_chart)
   val chartAccessibilitySummary =
-    "$baseChartDesc. 7-day logged total: $totalLoggedMinutes min across $activeDays of 7 active days. Best day: $bestDayMinutes min."
+    "$baseChartDesc. 7-day logged total: $totalLoggedCheckIns logged across $activeDays of 7 active days. Best day: $bestDayCheckIns logged."
 
   Card(
     modifier = modifier
@@ -157,7 +155,7 @@ fun DevelopmentStatsChartCard(
         )
       }
 
-      // 3-KPI Summary Row (strictly real submitted practice minutes)
+      // 3-KPI Summary Row (strictly real submitted reflection check-ins — never estimates minutes)
       Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -171,7 +169,7 @@ fun DevelopmentStatsChartCard(
         ) {
           StatSummaryCell(
             label = stringResource(R.string.dev_stats_total_label),
-            value = "$totalLoggedMinutes min",
+            value = "$totalLoggedCheckIns logged",
             modifier = Modifier
               .weight(1f)
               .testTag("stats_total_value"),
@@ -185,7 +183,7 @@ fun DevelopmentStatsChartCard(
           )
           StatSummaryCell(
             label = stringResource(R.string.dev_stats_best_day_label),
-            value = "$bestDayMinutes min",
+            value = "$bestDayCheckIns logged",
             modifier = Modifier
               .weight(1f)
               .testTag("stats_best_day_value"),
@@ -193,7 +191,7 @@ fun DevelopmentStatsChartCard(
         }
       }
 
-      // Native Compose 7-Day Bar Chart Area (bars represent real logged minutes only)
+      // Native Compose 7-Day Bar Chart Area (bars represent real logged reflection check-ins only)
       Column(
         modifier = Modifier
           .fillMaxWidth()
@@ -207,12 +205,12 @@ fun DevelopmentStatsChartCard(
           verticalAlignment = Alignment.CenterVertically,
         ) {
           Text(
-            text = "Logged Practice Minutes (min)",
+            text = "Logged Reflections",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
           Text(
-            text = "Scale: 0 – $chartCeiling min",
+            text = "Scale: 0 – $chartCeiling check-ins",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -264,8 +262,8 @@ fun DevelopmentStatsChartCard(
             verticalAlignment = Alignment.Bottom,
           ) {
             stats.forEachIndexed { index, stat ->
-              val loggedMinutes = stat.practiceMinutes
-              val targetFraction = (loggedMinutes.toFloat() / chartCeiling.toFloat()).coerceIn(0f, 1f)
+              val loggedCount = stat.loggedCheckIns
+              val targetFraction = (loggedCount.toFloat() / chartCeiling.toFloat()).coerceIn(0f, 1f)
               val animatedFraction by animateFloatAsState(
                 targetValue = targetFraction,
                 animationSpec = spring(
@@ -277,7 +275,7 @@ fun DevelopmentStatsChartCard(
               val isSelected = index == safeSelectedIndex
 
               val barBrush = when {
-                loggedMinutes == 0 -> Brush.verticalGradient(
+                loggedCount == 0 -> Brush.verticalGradient(
                   colors = listOf(OutlineWarm.copy(alpha = 0.65f), OutlineWarm.copy(alpha = 0.45f)),
                 )
                 isSelected || stat.dayOffsetFromToday == 0 -> Brush.verticalGradient(
@@ -292,13 +290,13 @@ fun DevelopmentStatsChartCard(
                 append("${stat.dayLabel} (${stat.fullDateLabel}): ")
                 when {
                   stat.hasLiveSubmission -> {
-                    append("Logged by $playerFirstName, $loggedMinutes practice minutes. Focus: ${stat.focusTag}.")
+                    append("Logged by $playerFirstName, $loggedCount reflection check-in(s). Focus: ${stat.focusTag}.")
                   }
                   stat.isSampleReferenceDay -> {
-                    append("Sample Week 2 Log (${stat.samplePreviewMinutes} min sample reference, excluded from 7-day totals), 0 logged practice minutes. Focus: ${stat.focusTag}.")
+                    append("Sample Week 2 Log (sample reference, excluded from 7-day logged totals), 0 logged check-ins. Focus: ${stat.focusTag}.")
                   }
                   else -> {
-                    append("Rest Day, 0 logged practice minutes.")
+                    append("Rest Day, 0 logged check-ins.")
                   }
                 }
                 if (isSelected) append(" Selected.")
@@ -330,14 +328,14 @@ fun DevelopmentStatsChartCard(
                   contentAlignment = Alignment.BottomCenter,
                 ) {
                   Text(
-                    text = if (loggedMinutes > 0) "$loggedMinutes" else "0",
+                    text = if (loggedCount > 0) "$loggedCount" else "0",
                     style = MaterialTheme.typography.labelSmall,
                     color = when {
                       isSelected -> BurntOrangeDark
-                      loggedMinutes > 0 -> MaterialTheme.colorScheme.onSurface
+                      loggedCount > 0 -> MaterialTheme.colorScheme.onSurface
                       else -> MaterialTheme.colorScheme.onSurfaceVariant
                     },
-                    fontWeight = if (isSelected || loggedMinutes > 0) FontWeight.Bold else FontWeight.Medium,
+                    fontWeight = if (isSelected || loggedCount > 0) FontWeight.Bold else FontWeight.Medium,
                     maxLines = 1,
                   )
                 }
@@ -349,7 +347,7 @@ fun DevelopmentStatsChartCard(
                     .padding(horizontal = 4.dp, vertical = 2.dp),
                   contentAlignment = Alignment.BottomCenter,
                 ) {
-                  val displayFraction = if (loggedMinutes == 0) 0.05f else animatedFraction.coerceAtLeast(0.12f)
+                  val displayFraction = if (loggedCount == 0) 0.05f else animatedFraction.coerceAtLeast(0.18f)
                   Box(
                     modifier = Modifier
                       .fillMaxWidth(0.78f)
@@ -386,14 +384,16 @@ fun DevelopmentStatsChartCard(
         else -> "Rest Day"
       }
       val dayDetailSubtitle = when {
-        selectedDay.hasLiveSubmission ->
-          "${selectedDay.practiceMinutes} practice minutes logged on this device."
+        selectedDay.hasLiveSubmission -> {
+          val unit = if (selectedDay.loggedCheckIns == 1) "reflection check-in" else "reflection check-ins"
+          "${selectedDay.loggedCheckIns} $unit logged on this device."
+        }
         selectedDay.isSampleReferenceDay ->
-          "Sample reference (${selectedDay.samplePreviewMinutes} min) · Excluded from 7-day logged totals."
+          "Sample reference · Excluded from 7-day logged totals."
         selectedDay.dayOffsetFromToday == 0 ->
-          "0 practice minutes logged yet today. Submit a drill reflection to log real minutes."
+          "0 reflection check-ins logged yet today. Submit a drill reflection to log today's check-in."
         else ->
-          "Scheduled recovery / rest day · 0 practice minutes logged."
+          "Scheduled recovery / rest day · 0 reflection check-ins logged."
       }
 
       Surface(

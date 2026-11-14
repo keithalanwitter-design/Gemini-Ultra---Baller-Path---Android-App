@@ -72,7 +72,6 @@ import com.example.R
 import com.example.ui.components.CoachKeithAvatar
 import com.example.ui.components.FictionalDemoBadge
 import com.example.ui.components.ReflectionSpeechToTextMicButton
-import com.example.ui.components.VideoCritiqueUploadAndBreakdownSection
 import com.example.ui.components.VoiceRecorderStudioCard
 import com.example.ui.theme.BurntOrange
 import com.example.ui.theme.NavyDeep
@@ -89,7 +88,6 @@ fun PracticeFlowScreen(
   onReflectionChanged: (String) -> Unit,
   onStarterCueClicked: (String) -> Unit,
   onSubmitReflection: () -> Unit,
-  onSubmitPracticeVideo: (videoUri: String, cameraAngleTag: String, playerNote: String) -> Unit = { _, _, _ -> },
   modifier: Modifier = Modifier,
 ) {
   BackHandler {
@@ -645,15 +643,6 @@ fun PracticeFlowScreen(
               modifier = Modifier.testTag("reflection_validation_error"),
             )
           }
-
-          VideoCritiqueUploadAndBreakdownSection(
-            assignmentId = assignment.assignmentId,
-            drillTitle = assignment.title,
-            videoSubmissions = uiState.videoSubmissions.filter {
-              it.assignmentId == assignment.assignmentId || it.drillTitle == assignment.title
-            }.ifEmpty { uiState.videoSubmissions.take(1) },
-            onSubmitVideo = onSubmitPracticeVideo,
-          )
         }
 
         Spacer(modifier = Modifier.height(20.dp))

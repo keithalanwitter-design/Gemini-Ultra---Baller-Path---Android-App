@@ -340,7 +340,7 @@ class TwoAssignmentFlowRobolectricTest {
         composeRule.onAllNodesWithTag("today_setup_in_progress_card").fetchSemanticsNodes().isNotEmpty()
       }
       composeRule.onNodeWithText(
-        "Coach Keith is reviewing Maya's info. You'll get access within 2 business days."
+        "Coach Keith reviews introductions within 2 business days and activates access separately."
       ).assertIsDisplayed()
       assertTrue(composeRule.onAllNodesWithText("Pass, Look, Decide").fetchSemanticsNodes().isEmpty())
 
@@ -824,16 +824,16 @@ class TwoAssignmentFlowRobolectricTest {
         .performScrollTo()
         .assertTextContains("Logged Work Only", substring = true)
 
-      // Verify all 7 day bars exist and initial totals exclude the sample week (0 min, 0 / 7, 0 min)
+      // Verify all 7 day bars exist and initial totals exclude the sample week (0 logged, 0 / 7, 0 logged)
       composeRule.onNodeWithTag("stats_total_value")
         .performScrollTo()
-        .assertTextContains("0 min", substring = true)
+        .assertTextContains("0 logged", substring = true)
       composeRule.onNodeWithTag("stats_active_days_value")
         .performScrollTo()
         .assertTextContains("0 / 7", substring = true)
       composeRule.onNodeWithTag("stats_best_day_value")
         .performScrollTo()
-        .assertTextContains("0 min", substring = true)
+        .assertTextContains("0 logged", substring = true)
       (0..6).forEach { idx ->
         composeRule.onNodeWithTag("stats_day_bar_$idx")
           .performScrollTo()
@@ -856,7 +856,7 @@ class TwoAssignmentFlowRobolectricTest {
         .performScrollTo()
         .assertTextContains("Rest Day", substring = true)
 
-      // 4. Submit Today's Pass, Look, Decide (8 min) and verify Today's bar and totals update live
+      // 4. Submit Today's Pass, Look, Decide and verify Today's bar and totals update live without estimating minutes
       composeRule.onNodeWithTag("nav_today").performClick()
       composeRule.waitUntil(timeoutMillis = 5_000) {
         composeRule.onAllNodesWithTag("today_primary_action_button").fetchSemanticsNodes().isNotEmpty()
@@ -881,13 +881,13 @@ class TwoAssignmentFlowRobolectricTest {
         .performScrollToNode(hasTestTag("dev_stats_chart_card"))
       composeRule.onNodeWithTag("stats_total_value")
         .performScrollTo()
-        .assertTextContains("8 min", substring = true)
+        .assertTextContains("1 logged", substring = true)
       composeRule.onNodeWithTag("stats_active_days_value")
         .performScrollTo()
         .assertTextContains("1 / 7", substring = true)
       composeRule.onNodeWithTag("stats_best_day_value")
         .performScrollTo()
-        .assertTextContains("8 min", substring = true)
+        .assertTextContains("1 logged", substring = true)
       composeRule.onNodeWithTag("stats_day_bar_6").performScrollTo().performClick()
       composeRule.waitForIdle()
       composeRule.onNodeWithTag("stats_selected_day_detail")
@@ -1025,6 +1025,115 @@ class TwoAssignmentFlowRobolectricTest {
       composeRule.waitForIdle()
     }
   }
+
+  @Test
+  fun audioArbitrator_andWebsiteAlignedCheckInsTeachBackGameCarryoverAndAccountLinks_workEndToEnd() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val app = context as Application
+
+    // Verify ActiveMicrophoneArbitrator mutual exclusion between MediaRecorder and SpeechRecognizer
+    var mediaRecorderPreempted = false
+    var speechRecognizerPreempted = false
+    com.example.ui.components.ActiveMicrophoneArbitrator.acquireForMediaRecorder {
+      mediaRecorderPreempted = true
+    }
+    assertEquals(
+      com.example.ui.components.ActiveMicrophoneArbitrator.MicOwner.MEDIA_RECORDER,
+      com.example.ui.components.ActiveMicrophoneArbitrator.currentOwner,
+    )
+    com.example.ui.components.ActiveMicrophoneArbitrator.acquireForSpeechRecognizer {
+      speechRecognizerPreempted = true
+    }
+    assertTrue(mediaRecorderPreempted)
+    assertEquals(
+      com.example.ui.components.ActiveMicrophoneArbitrator.MicOwner.SPEECH_RECOGNIZER,
+      com.example.ui.components.ActiveMicrophoneArbitrator.currentOwner,
+    )
+    com.example.ui.components.ActiveMicrophoneArbitrator.acquireForMediaRecorder {}
+    assertTrue(speechRecognizerPreempted)
+    com.example.ui.components.ActiveMicrophoneArbitrator.release(
+      com.example.ui.components.ActiveMicrophoneArbitrator.MicOwner.MEDIA_RECORDER
+    )
+    assertEquals(
+      com.example.ui.components.ActiveMicrophoneArbitrator.MicOwner.NONE,
+      com.example.ui.components.ActiveMicrophoneArbitrator.currentOwner,
+    )
+
+    ActivityScenario.launch(MainActivity::class.java).use {
+      composeRule.waitUntil(timeoutMillis = 5_000) {
+        composeRule.onAllNodesWithTag("baller_path_loop_card").fetchSemanticsNodes().isNotEmpty()
+      }
+
+      // 1. Today shows compact CoachingLoopSummaryCard with Starting Point first & film closed notice
+      composeRule.onNodeWithTag("baller_path_loop_card")
+        .performScrollTo()
+        .assertIsDisplayed()
+      composeRule.onNodeWithText("1. Starting Point First", substring = true)
+        .performScrollTo()
+        .assertIsDisplayed()
+      composeRule.onNodeWithText("Player video submissions and film review are closed at launch.", substring = true)
+        .performScrollTo()
+        .assertIsDisplayed()
+
+      // 2. Plan shows Check-Ins (30m Prospective, 20m/30m First-Week, 20m/30m Development), In Your Words, and Game Carryover
+      composeRule.onNodeWithTag("nav_plan").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("coach_checkin_consultation_card")
+        .performScrollTo()
+        .assertIsDisplayed()
+      composeRule.onNodeWithTag("checkin_type_prospective_call")
+        .performScrollTo()
+        .assertIsDisplayed()
+      composeRule.onNodeWithText("Prospective Family Call", substring = true)
+        .performScrollTo()
+        .assertIsDisplayed()
+      composeRule.onNodeWithTag("checkin_type_first_week_check_in")
+        .performScrollTo()
+        .assertIsDisplayed()
+      composeRule.onNodeWithTag("open_booking_page_button")
+        .performScrollTo()
+        .performClick()
+      composeRule.waitForIdle()
+      val bookIntent = Shadows.shadowOf(app).nextStartedActivity
+      assertEquals(Intent.ACTION_VIEW, bookIntent?.action)
+      assertEquals(Uri.parse("https://ballerpath.com/book"), bookIntent?.data)
+
+      composeRule.onNodeWithTag("teach_back_in_your_words_card")
+        .performScrollTo()
+        .assertIsDisplayed()
+      composeRule.onNodeWithTag("teach_back_save_button")
+        .performScrollTo()
+        .performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("teach_back_saved_badge")
+        .performScrollTo()
+        .assertIsDisplayed()
+
+      composeRule.onNodeWithTag("game_transfer_bridge_card")
+        .performScrollTo()
+        .assertIsDisplayed()
+
+      // 3. Account shows direct links for Family Access, Book a Check-In, and Privacy
+      composeRule.onNodeWithTag("nav_account").performClick()
+      composeRule.waitForIdle()
+      composeRule.onNodeWithTag("account_website_handoff_card")
+        .performScrollTo()
+        .assertIsDisplayed()
+      composeRule.onNodeWithText(
+        "Coach Keith reviews family introductions within 2 business days and activates access separately.",
+        substring = true,
+      ).performScrollTo().assertIsDisplayed()
+
+      composeRule.onNodeWithTag("account_family_access_link")
+        .performScrollTo()
+        .performClick()
+      composeRule.waitForIdle()
+      val registerIntent = Shadows.shadowOf(app).nextStartedActivity
+      assertEquals(Intent.ACTION_VIEW, registerIntent?.action)
+      assertEquals(Uri.parse("https://ballerpath.com/register"), registerIntent?.data)
+    }
+  }
 }
+
 
 

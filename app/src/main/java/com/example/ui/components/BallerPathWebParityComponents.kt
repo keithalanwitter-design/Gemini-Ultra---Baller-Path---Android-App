@@ -3,9 +3,9 @@ package com.example.ui.components
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -16,22 +16,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Loop
-import androidx.compose.material.icons.filled.School
-import androidx.compose.material.icons.filled.VideoCall
-import androidx.compose.material.icons.outlined.CheckCircleOutline
-import androidx.compose.material.icons.outlined.Language
-import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.Loop
+import androidx.compose.material.icons.outlined.SportsBasketball
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -40,381 +38,149 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import com.example.data.model.BallerPathLoopStage
+import com.example.data.model.CoachCheckInMeetingType
 import com.example.data.model.CoachCheckInState
-import com.example.data.model.GradeBandPathway
-import com.example.data.model.TrainingProgramTrack
+import com.example.data.model.GameCarryoverEntry
+import com.example.data.model.TeachBackEntry
 import com.example.ui.theme.BurntOrange
+import com.example.ui.theme.BurntOrangeDark
 import com.example.ui.theme.BurntOrangeTint
 import com.example.ui.theme.NavyDeep
-
-private const val BALLER_PATH_WEBSITE_URL = "https://ballerpath.com"
+import com.example.ui.theme.SuccessGreen
 
 /**
- * Mirrors the signature 4-step coaching loop from ballerpath.com:
- * 1. Focus -> 2. Practice -> 3. Reflect -> 4. Adjust
+ * 1. Compact Coaching Loop Card on Today.
+ * Matches ballerpath.com/preview: introduces the Starting Point first, then shows
+ * Focus -> Practice -> Written Reflection -> Coach Adjustment.
+ * Explicitly notes that film review is closed at launch.
+ * Contains no action button so Today remains focused on one clear next action.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun FourStageCoachingLoopCard(
-  activeStage: BallerPathLoopStage,
-  onSelectStageAction: (BallerPathLoopStage) -> Unit,
+fun CoachingLoopSummaryCard(
   modifier: Modifier = Modifier,
 ) {
-  var inspectedStage by remember(activeStage) { mutableStateOf(activeStage) }
-
   Card(
     modifier = modifier
       .fillMaxWidth()
-      .testTag("baller_path_four_stage_loop_card"),
+      .testTag("baller_path_loop_card"),
     shape = MaterialTheme.shapes.large,
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
   ) {
     Column(
-      modifier = Modifier.padding(16.dp),
-      verticalArrangement = Arrangement.spacedBy(10.dp),
+      modifier = Modifier.padding(14.dp),
+      verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
       FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalArrangement = Arrangement.spacedBy(4.dp),
       ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
           Icon(
-            imageVector = Icons.Filled.Loop,
+            imageVector = Icons.Outlined.Loop,
             contentDescription = null,
             tint = BurntOrange,
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier.size(16.dp),
           )
-          Spacer(modifier = Modifier.width(6.dp))
           Text(
-            text = "BALLERPATH.COM CORE LOOP · FOCUS ➔ PRACTICE ➔ REFLECT ➔ ADJUST",
+            text = "HOW BALLER PATH WORKS · GRADES 4–8",
             style = MaterialTheme.typography.labelSmall,
             color = BurntOrange,
             fontWeight = FontWeight.Bold,
           )
         }
-        Surface(
-          shape = RoundedCornerShape(50),
-          color = NavyDeep,
-        ) {
-          Text(
-            text = "Current Stage: ${activeStage.title}",
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.White,
-            modifier = Modifier
-              .padding(horizontal = 10.dp, vertical = 3.dp)
-              .testTag("active_loop_stage_badge"),
-          )
-        }
+        FictionalDemoBadge(text = "Sample Pilot Walkthrough")
       }
 
       Text(
-        text = "Busy isn't the same as progress. Every week on ballerpath.com and in the app repeats this 4-step coaching cycle with Coach Keith:",
+        text = "1. Starting Point First",
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurface,
+        fontWeight = FontWeight.Bold,
+      )
+      Text(
+        text = "Coach Keith starts by learning where your player is right now, then guides one weekly loop:",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
 
-      FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-      ) {
-        BallerPathLoopStage.entries.forEach { stage ->
-          val isCurrent = stage == activeStage
-          val isInspected = stage == inspectedStage
-          Surface(
-            onClick = { inspectedStage = stage },
-            modifier = Modifier
-              .defaultMinSize(minHeight = 48.dp)
-              .testTag("loop_stage_pill_${stage.name.lowercase()}"),
-            shape = RoundedCornerShape(12.dp),
-            color = when {
-              isCurrent -> BurntOrange
-              isInspected -> NavyDeep
-              else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
-            },
-            border = BorderStroke(
-              width = 1.dp,
-              color = if (isCurrent || isInspected) BurntOrange else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
-            ),
-          ) {
-            Row(
-              modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Box(
-                modifier = Modifier
-                  .size(22.dp)
-                  .clip(CircleShape)
-                  .background(
-                    if (isCurrent || isInspected) Color.White.copy(alpha = 0.22f)
-                    else MaterialTheme.colorScheme.surface
-                  ),
-                contentAlignment = Alignment.Center,
-              ) {
-                Text(
-                  text = "${stage.stepNumber}",
-                  style = MaterialTheme.typography.labelSmall,
-                  color = if (isCurrent || isInspected) Color.White else NavyDeep,
-                  fontWeight = FontWeight.Bold,
-                )
-              }
-              Spacer(modifier = Modifier.width(6.dp))
-              Text(
-                text = stage.title,
-                style = MaterialTheme.typography.labelLarge,
-                color = if (isCurrent || isInspected) Color.White else MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-              )
-            }
-          }
-        }
-      }
-
       Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+          .fillMaxWidth()
+          .testTag("coaching_loop_steps_ pill_row"),
         shape = MaterialTheme.shapes.medium,
-        color = NavyDeep,
-      ) {
-        Column(
-          modifier = Modifier.padding(12.dp),
-          verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-          Text(
-            text = "STAGE ${inspectedStage.stepNumber}: ${inspectedStage.title.uppercase()} — ${inspectedStage.tagline}",
-            style = MaterialTheme.typography.labelMedium,
-            color = BurntOrangeTint,
-            fontWeight = FontWeight.Bold,
-          )
-          Text(
-            text = inspectedStage.webAndAppConnection,
-            style = MaterialTheme.typography.bodySmall,
-            color = Color.White,
-          )
-          OutlinedButton(
-            onClick = { onSelectStageAction(inspectedStage) },
-            modifier = Modifier
-              .defaultMinSize(minHeight = 48.dp)
-              .testTag("loop_stage_action_button"),
-            shape = RoundedCornerShape(10.dp),
-            border = BorderStroke(1.dp, BurntOrange),
-          ) {
-            Text(
-              text = "Go to ${inspectedStage.title} Step in App",
-              style = MaterialTheme.typography.labelMedium,
-              color = Color.White,
-              fontWeight = FontWeight.Bold,
-            )
-          }
-        }
-      }
-    }
-  }
-}
-
-/**
- * Streamlines Baller Path for a broader reach across Grades 4th–12th and connects
- * Remote Anywhere families + Storm Basketball Training (IBL / ABL / Skill Lab) players.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun BroaderReachPathwayAndEvaluationCard(
-  selectedGradeBand: GradeBandPathway,
-  selectedProgramTrack: TrainingProgramTrack,
-  onSelectGradeBand: (GradeBandPathway) -> Unit,
-  onSelectProgramTrack: (TrainingProgramTrack) -> Unit,
-  modifier: Modifier = Modifier,
-) {
-  Card(
-    modifier = modifier
-      .fillMaxWidth()
-      .testTag("broader_reach_pathway_card"),
-    shape = MaterialTheme.shapes.large,
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)),
-  ) {
-    Column(
-      modifier = Modifier.padding(16.dp),
-      verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-      Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-          imageVector = Icons.Filled.School,
-          contentDescription = null,
-          tint = BurntOrange,
-          modifier = Modifier.size(20.dp),
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Column {
-          Text(
-            text = "STARTING-POINT EVALUATION & PATHWAY (GRADES 4TH–12TH)",
-            style = MaterialTheme.typography.labelMedium,
-            color = BurntOrange,
-            fontWeight = FontWeight.Bold,
-          )
-          Text(
-            text = "Streamlined across ballerpath.com & Storm Basketball Training",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
-        }
-      }
-
-      Text(
-        text = "1. Player Grade Band (tailors tactical terminology & rep speed):",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-      )
-
-      FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-      ) {
-        GradeBandPathway.entries.forEach { band ->
-          val selected = band == selectedGradeBand
-          Surface(
-            onClick = { onSelectGradeBand(band) },
-            modifier = Modifier
-              .defaultMinSize(minHeight = 48.dp)
-              .testTag("pathway_grade_${band.id}"),
-            shape = RoundedCornerShape(12.dp),
-            color = if (selected) NavyDeep else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-            border = BorderStroke(1.dp, if (selected) BurntOrange else MaterialTheme.colorScheme.outline),
-          ) {
-            Row(
-              modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Icon(
-                imageVector = if (selected) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircleOutline,
-                contentDescription = null,
-                tint = if (selected) BurntOrange else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp),
-              )
-              Spacer(modifier = Modifier.width(6.dp))
-              Text(
-                text = band.label,
-                style = MaterialTheme.typography.labelMedium,
-                color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
-              )
-            }
-          }
-        }
-      }
-
-      Surface(
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.primaryContainer,
-        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
       ) {
         Text(
-          text = "Grade Band Focus: ${selectedGradeBand.focusSummary}",
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onPrimaryContainer,
-          modifier = Modifier.padding(10.dp),
+          text = "Focus  →  Practice  →  Written Reflection  →  Coach Adjustment",
+          style = MaterialTheme.typography.labelMedium,
+          color = NavyDeep,
+          fontWeight = FontWeight.Bold,
+          modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
         )
       }
 
       Text(
-        text = "2. Program Track (Remote Anywhere vs. Storm Basketball IBL / ABL / Skill Lab):",
+        text = "Player video submissions and film review are closed at launch.",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
-
-      Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        TrainingProgramTrack.entries.forEach { track ->
-          val selected = track == selectedProgramTrack
-          Surface(
-            onClick = { onSelectProgramTrack(track) },
-            modifier = Modifier
-              .fillMaxWidth()
-              .defaultMinSize(minHeight = 48.dp)
-              .testTag("pathway_track_${track.id}"),
-            shape = RoundedCornerShape(12.dp),
-            color = if (selected) NavyDeep else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            border = BorderStroke(1.dp, if (selected) BurntOrange else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
-          ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-              Text(
-                text = track.label,
-                style = MaterialTheme.typography.titleSmall,
-                color = if (selected) BurntOrangeTint else MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-              )
-              Text(
-                text = track.subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (selected) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-            }
-          }
-        }
-      }
     }
   }
 }
 
 /**
- * Mirrors ballerpath.com's Google Meet Check-In & Consultation system:
- * - First-Week Activation Check-In (20 min)
- * - Ongoing Development Check-In (20 min)
- * - Prospective Family Intro Call (30 min)
+ * 2. Check-Ins Card on Plan (`CoachKeithCheckInConsultationCard`).
+ * Uses the exact meeting types and eligibility from ballerpath.com/book:
+ * - Prospective Family Call: 30 minutes
+ * - First-Week Check-In: Planned for 20 minutes (30-minute calendar reservation) · Included once after activation
+ * - Development Check-In: Planned for 20 minutes (30-minute calendar reservation) · Regular check-ins depend on program
+ * No film-review agenda options. Notes saved in the offline app stay on this phone only.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CoachKeithCheckInConsultationCard(
   checkInState: CoachCheckInState,
-  onSaveCheckInPrep: (checkInType: String, agendaTopics: List<String>, confidenceRating: Int, familyNote: String) -> Unit,
+  onSelectMeetingType: (CoachCheckInMeetingType) -> Unit,
+  onToggleAgendaTopic: (String) -> Unit,
+  onSaveLocalCallNote: (String) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val context = LocalContext.current
-  val checkInTypes = remember {
-    listOf(
-      "First-Week Activation Check-In (20 min · Google Meet)",
-      "Development Check-In (20 min · Google Meet)",
-      "Prospective Family Fit Call (30 min · Google Meet)",
-    )
-  }
-  val availableTopics = remember {
-    listOf(
-      "Review 'Pass, Look, Decide' wing-angle film clip",
-      "Confirm next week's spacing adjustment",
-      "Game confidence & decision speed under pressure",
-      "Connecting home reps with team / IBL / ABL games",
-    )
+  var noteDraft by rememberSaveable(checkInState.localNoteForCall) {
+    mutableStateOf(checkInState.localNoteForCall)
   }
 
-  var selectedType by rememberSaveable(checkInState.selectedCheckInType) {
-    mutableStateOf(checkInState.selectedCheckInType)
-  }
-  var selectedTopics by rememberSaveable(checkInState.selectedAgendaTopics) {
-    mutableStateOf(checkInState.selectedAgendaTopics)
-  }
-  var confidence by rememberSaveable(checkInState.confidenceRating) {
-    mutableIntStateOf(checkInState.confidenceRating)
-  }
-  var familyNote by rememberSaveable(checkInState.familyQuestionNote) {
-    mutableStateOf(checkInState.familyQuestionNote)
-  }
+  val approvedAgendaOptions = listOf(
+    "Confirm this week's spacing focus",
+    "Questions on the 'Try the next rep' adjustment",
+    "Discuss what showed up in games",
+    "Plan next week's practice rhythm",
+  )
 
   Card(
     modifier = modifier
@@ -422,7 +188,7 @@ fun CoachKeithCheckInConsultationCard(
       .testTag("coach_checkin_consultation_card"),
     shape = MaterialTheme.shapes.large,
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    border = BorderStroke(1.5.dp, BurntOrange.copy(alpha = 0.8f)),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)),
   ) {
     Column(
       modifier = Modifier.padding(16.dp),
@@ -433,181 +199,144 @@ fun CoachKeithCheckInConsultationCard(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalArrangement = Arrangement.spacedBy(6.dp),
       ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
           Icon(
-            imageVector = Icons.Filled.VideoCall,
+            imageVector = Icons.Outlined.CalendarMonth,
             contentDescription = null,
             tint = BurntOrange,
-            modifier = Modifier.size(22.dp),
+            modifier = Modifier.size(18.dp),
           )
-          Spacer(modifier = Modifier.width(8.dp))
-          Column {
-            Text(
-              text = "COACH KEITH LIVE CHECK-INS · GOOGLE MEET & BALLERPATH.COM",
-              style = MaterialTheme.typography.labelMedium,
-              color = BurntOrange,
-              fontWeight = FontWeight.Bold,
-            )
-            Text(
-              text = "Prepare your 20-min First-Week or Development Check-In agenda",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-          }
-        }
-        if (checkInState.isCheckInPrepSaved) {
-          Surface(
-            shape = RoundedCornerShape(50),
+          Text(
+            text = "CHECK-INS WITH COACH KEITH",
+            style = MaterialTheme.typography.labelSmall,
             color = BurntOrange,
-          ) {
-            Text(
-              text = "Agenda Ready",
-              style = MaterialTheme.typography.labelSmall,
-              color = Color.White,
-              modifier = Modifier
-                .padding(horizontal = 10.dp, vertical = 3.dp)
-                .testTag("checkin_prep_saved_badge"),
-            )
-          }
+            fontWeight = FontWeight.Bold,
+          )
         }
+        FictionalDemoBadge(text = "Saved on This Phone Only")
       }
 
       Text(
-        text = "1. Select Check-In Session Type (from ballerpath.com):",
-        style = MaterialTheme.typography.labelSmall,
+        text = "Meeting Types & Eligibility",
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+      )
+      Text(
+        text = "First-week call is included once after activation. Regular development check-ins depend on your program.",
+        style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
 
-      Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        checkInTypes.forEachIndexed { idx, type ->
-          val isSelected = selectedType == type
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        CoachCheckInMeetingType.entries.forEach { meetingType ->
+          val isSelected = checkInState.selectedMeetingType == meetingType
           Surface(
-            onClick = { selectedType = type },
             modifier = Modifier
               .fillMaxWidth()
-              .defaultMinSize(minHeight = 48.dp)
-              .testTag("checkin_type_option_$idx"),
-            shape = RoundedCornerShape(10.dp),
-            color = if (isSelected) NavyDeep else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-            border = BorderStroke(1.dp, if (isSelected) BurntOrange else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
-          ) {
-            Row(
-              modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Icon(
-                imageVector = Icons.Filled.CalendarMonth,
-                contentDescription = null,
-                tint = if (isSelected) BurntOrange else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp),
+              .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(),
+                onClick = { onSelectMeetingType(meetingType) },
               )
-              Spacer(modifier = Modifier.width(8.dp))
+              .semantics(mergeDescendants = true) {
+                contentDescription = "${meetingType.title}, ${meetingType.durationText}. ${meetingType.eligibilityText}"
+                role = Role.RadioButton
+              }
+              .testTag("checkin_type_${meetingType.id}"),
+            shape = MaterialTheme.shapes.medium,
+            color = if (isSelected) BurntOrangeTint.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+            border = BorderStroke(
+              width = if (isSelected) 1.5.dp else 1.dp,
+              color = if (isSelected) BurntOrange else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+            ),
+          ) {
+            Column(
+              modifier = Modifier.padding(12.dp),
+              verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                Text(
+                  text = meetingType.title,
+                  style = MaterialTheme.typography.titleSmall,
+                  color = MaterialTheme.colorScheme.onSurface,
+                  fontWeight = FontWeight.Bold,
+                )
+                Text(
+                  text = meetingType.durationText,
+                  style = MaterialTheme.typography.labelSmall,
+                  color = BurntOrangeDark,
+                  fontWeight = FontWeight.SemiBold,
+                )
+              }
               Text(
-                text = type,
+                text = meetingType.eligibilityText,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
             }
           }
         }
       }
 
+      HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+
       Text(
-        text = "2. Court Confidence Check ($confidence / 5):",
-        style = MaterialTheme.typography.labelSmall,
+        text = "Optional Call Scratchpad (Stays on This Phone)",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        fontWeight = FontWeight.Bold,
+      )
+      Text(
+        text = "Any note saved in this offline app stays on this phone and does not reach Coach Keith.",
+        style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
 
       FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-      ) {
-        (1..5).forEach { level ->
-          val active = confidence == level
-          Surface(
-            onClick = { confidence = level },
-            modifier = Modifier
-              .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-              .testTag("checkin_confidence_$level"),
-            shape = RoundedCornerShape(10.dp),
-            color = if (active) BurntOrange else MaterialTheme.colorScheme.surfaceVariant,
-          ) {
-            Box(
-              modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-              contentAlignment = Alignment.Center,
-            ) {
-              Text(
-                text = "$level/5",
-                style = MaterialTheme.typography.labelMedium,
-                color = if (active) Color.White else MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-              )
-            }
-          }
-        }
-      }
-
-      Text(
-        text = "3. Topics for Coach Keith on Google Meet:",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-      )
-
-      FlowRow(
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
       ) {
-        availableTopics.forEachIndexed { idx, topic ->
-          val chosen = topic in selectedTopics
-          Surface(
-            onClick = {
-              selectedTopics = if (chosen && selectedTopics.size > 1) {
-                selectedTopics - topic
-              } else if (!chosen) {
-                selectedTopics + topic
-              } else {
-                selectedTopics
-              }
-            },
-            modifier = Modifier
-              .defaultMinSize(minHeight = 48.dp)
-              .testTag("checkin_topic_chip_$idx"),
-            shape = RoundedCornerShape(10.dp),
-            color = if (chosen) NavyDeep else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-            border = BorderStroke(1.dp, if (chosen) BurntOrange else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
-          ) {
-            Row(
-              modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Icon(
-                imageVector = if (chosen) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircleOutline,
-                contentDescription = null,
-                tint = if (chosen) BurntOrange else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp),
-              )
-              Spacer(modifier = Modifier.width(6.dp))
+        approvedAgendaOptions.forEachIndexed { idx, topic ->
+          val selected = topic in checkInState.selectedAgendaTopics
+          FilterChip(
+            selected = selected,
+            onClick = { onToggleAgendaTopic(topic) },
+            modifier = Modifier.testTag("checkin_agenda_chip_$idx"),
+            label = {
               Text(
                 text = topic,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (chosen) Color.White else MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.labelSmall,
               )
-            }
-          }
+            },
+            colors = FilterChipDefaults.filterChipColors(
+              selectedContainerColor = BurntOrangeTint,
+              selectedLabelColor = BurntOrangeDark,
+            ),
+          )
         }
       }
 
       OutlinedTextField(
-        value = familyNote,
-        onValueChange = { familyNote = it },
+        value = noteDraft,
+        onValueChange = { noteDraft = it },
         modifier = Modifier
           .fillMaxWidth()
-          .testTag("checkin_family_note_input"),
-        label = { Text("Parent / Player Pre-Call Note for Coach Keith") },
+          .testTag("checkin_local_note_input"),
+        label = { Text("Questions to remember for your call (saved on this phone)") },
+        minLines = 2,
+        maxLines = 3,
         colors = OutlinedTextFieldDefaults.colors(
           focusedBorderColor = BurntOrange,
           focusedLabelColor = BurntOrange,
+          cursorColor = BurntOrange,
         ),
       )
 
@@ -616,29 +345,25 @@ fun CoachKeithCheckInConsultationCard(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        Button(
-          onClick = {
-            onSaveCheckInPrep(selectedType, selectedTopics, confidence, familyNote)
-          },
+        OutlinedButton(
+          onClick = { onSaveLocalCallNote(noteDraft) },
           modifier = Modifier
             .defaultMinSize(minHeight = 48.dp)
             .testTag("save_checkin_prep_button"),
           shape = RoundedCornerShape(12.dp),
-          colors = ButtonDefaults.buttonColors(
-            containerColor = BurntOrange,
-            contentColor = Color.White,
-          ),
+          border = BorderStroke(1.dp, NavyDeep),
         ) {
           Text(
-            text = "Save Check-In Agenda for Coach Keith",
+            text = if (checkInState.isLocalNoteSaved) "Saved on This Phone" else "Save Note on Phone",
             style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
+            color = NavyDeep,
+            fontWeight = FontWeight.SemiBold,
           )
         }
 
-        OutlinedButton(
+        Button(
           onClick = {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(BALLER_PATH_WEBSITE_URL)).apply {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://ballerpath.com/book")).apply {
               addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             runCatching { context.startActivity(intent) }
@@ -646,23 +371,25 @@ fun CoachKeithCheckInConsultationCard(
           modifier = Modifier
             .defaultMinSize(minHeight = 48.dp)
             .semantics {
-              contentDescription = "Open ballerpath.com website to manage membership and Google Meet check-ins"
+              contentDescription = "Open Baller Path booking page at https://ballerpath.com/book"
             }
-            .testTag("open_ballerpath_website_button"),
+            .testTag("open_booking_page_button"),
           shape = RoundedCornerShape(12.dp),
-          border = BorderStroke(1.dp, NavyDeep),
+          colors = ButtonDefaults.buttonColors(
+            containerColor = BurntOrange,
+            contentColor = Color.White,
+          ),
         ) {
           Icon(
-            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+            imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
             contentDescription = null,
-            tint = NavyDeep,
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(16.dp),
           )
           Spacer(modifier = Modifier.width(6.dp))
           Text(
-            text = "Open ballerpath.com",
+            text = "Book on ballerpath.com/book",
             style = MaterialTheme.typography.labelLarge,
-            color = NavyDeep,
+            fontWeight = FontWeight.Bold,
           )
         }
       }
@@ -671,99 +398,480 @@ fun CoachKeithCheckInConsultationCard(
 }
 
 /**
- * Displays the Website (ballerpath.com) <-> Mobile App Streamlined Concept Alignment Card
- * so families and Coach Keith see how the website membership and mobile app repeat the exact same pillars.
+ * 3. "In Your Words" Card (`InYourWordsTeachBackCard`) after feedback.
+ * Gives the player a way to restate the coaching adjustment in their own words before the next rep.
+ * Clearly labeled as saved on this phone only (no coach-mark controls or false delivery claims).
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun WebsiteAppStreamlinedAuditCard(
+fun InYourWordsTeachBackCard(
+  teachBackEntry: TeachBackEntry,
+  onSaveTeachBack: (whatWillDoDifferently: String, whatWillNotice: String) -> Unit,
   modifier: Modifier = Modifier,
 ) {
+  var doDifferentlyDraft by rememberSaveable(teachBackEntry.whatWillDoDifferently) {
+    mutableStateOf(teachBackEntry.whatWillDoDifferently)
+  }
+  var noticeDraft by rememberSaveable(teachBackEntry.whatWillNotice) {
+    mutableStateOf(teachBackEntry.whatWillNotice)
+  }
+
   Card(
     modifier = modifier
       .fillMaxWidth()
-      .testTag("website_app_streamlined_audit_card"),
+      .testTag("teach_back_in_your_words_card"),
     shape = MaterialTheme.shapes.large,
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
   ) {
     Column(
       modifier = Modifier.padding(16.dp),
       verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-      Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-          imageVector = Icons.Outlined.Language,
-          contentDescription = null,
-          tint = BurntOrange,
-          modifier = Modifier.size(20.dp),
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Column {
+      FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+          Icon(
+            imageVector = Icons.Outlined.EditNote,
+            contentDescription = null,
+            tint = BurntOrange,
+            modifier = Modifier.size(18.dp),
+          )
           Text(
-            text = "WEBSITE (BALLERPATH.COM) ↔ ANDROID APP PARITY",
-            style = MaterialTheme.typography.labelMedium,
+            text = "IN YOUR WORDS · AFTER FEEDBACK",
+            style = MaterialTheme.typography.labelSmall,
             color = BurntOrange,
             fontWeight = FontWeight.Bold,
           )
+        }
+        FictionalDemoBadge(text = "Saved on This Phone Only")
+      }
+
+      Text(
+        text = "Put the Adjustment in Your Own Words",
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+      )
+      Text(
+        text = "After reading feedback, write how you'll use the adjustment on your next court session. This note stays on this phone.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+
+      OutlinedTextField(
+        value = doDifferentlyDraft,
+        onValueChange = { doDifferentlyDraft = it },
+        modifier = Modifier
+          .fillMaxWidth()
+          .testTag("teach_back_do_differently_input"),
+        label = { Text("What will you do differently on the next rep?") },
+        minLines = 2,
+        maxLines = 3,
+        colors = OutlinedTextFieldDefaults.colors(
+          focusedBorderColor = BurntOrange,
+          focusedLabelColor = BurntOrange,
+          cursorColor = BurntOrange,
+        ),
+      )
+
+      OutlinedTextField(
+        value = noticeDraft,
+        onValueChange = { noticeDraft = it },
+        modifier = Modifier
+          .fillMaxWidth()
+          .testTag("teach_back_notice_input"),
+        label = { Text("What will you look for on the floor?") },
+        minLines = 2,
+        maxLines = 3,
+        colors = OutlinedTextFieldDefaults.colors(
+          focusedBorderColor = BurntOrange,
+          focusedLabelColor = BurntOrange,
+          cursorColor = BurntOrange,
+        ),
+      )
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        if (teachBackEntry.isSavedLocally) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.testTag("teach_back_saved_badge"),
+          ) {
+            Icon(
+              imageVector = Icons.Filled.CheckCircle,
+              contentDescription = null,
+              tint = SuccessGreen,
+              modifier = Modifier.size(16.dp),
+            )
+            Text(
+              text = "Saved on this phone",
+              style = MaterialTheme.typography.labelSmall,
+              color = SuccessGreen,
+              fontWeight = FontWeight.Bold,
+            )
+          }
+        } else {
+          Spacer(modifier = Modifier.width(4.dp))
+        }
+
+        Button(
+          onClick = {
+            if (doDifferentlyDraft.isNotBlank() || noticeDraft.isNotBlank()) {
+              onSaveTeachBack(doDifferentlyDraft.trim(), noticeDraft.trim())
+            }
+          },
+          modifier = Modifier
+            .defaultMinSize(minHeight = 48.dp)
+            .testTag("teach_back_save_button"),
+          shape = RoundedCornerShape(12.dp),
+          colors = ButtonDefaults.buttonColors(
+            containerColor = NavyDeep,
+            contentColor = Color.White,
+          ),
+        ) {
           Text(
-            text = "Repeatable core concepts shared across web membership & daily court tool",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = "Save In My Words",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
           )
         }
       }
+    }
+  }
+}
 
-      HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+/**
+ * 4. Short "What Showed Up in the Game?" Reflection Card (`GameCarryoverReflectionCard`).
+ * Gives the player a quick way to record whether the weekly focus carried over to live play.
+ * Clearly labeled with sample data and local-only storage on this phone.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun GameCarryoverReflectionCard(
+  entries: List<GameCarryoverEntry>,
+  onAddEntry: (opponent: String, whatShowedUp: String, nextFocusInGames: String) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  var opponentDraft by rememberSaveable { mutableStateOf("") }
+  var showedUpDraft by rememberSaveable { mutableStateOf("") }
+  var nextGameDraft by rememberSaveable { mutableStateOf("") }
 
-      WebAppConceptRow(
-        pillar = "1. Focus ➔ Practice ➔ Reflect ➔ Adjust + Teach-Back ('In Your Words')",
-        detail = "Coach Keith sets 1 focus from your session/clip; player completes guided reps, submits a 30s clip + 1 honest sentence, and says the adjustment back in their own words.",
+  Card(
+    modifier = modifier
+      .fillMaxWidth()
+      .testTag("game_transfer_bridge_card"),
+    shape = MaterialTheme.shapes.large,
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
+  ) {
+    Column(
+      modifier = Modifier.padding(16.dp),
+      verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+      FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+          Icon(
+            imageVector = Icons.Outlined.SportsBasketball,
+            contentDescription = null,
+            tint = BurntOrange,
+            modifier = Modifier.size(18.dp),
+          )
+          Text(
+            text = "GAME CARRYOVER · ON-DEVICE LOG",
+            style = MaterialTheme.typography.labelSmall,
+            color = BurntOrange,
+            fontWeight = FontWeight.Bold,
+          )
+        }
+        FictionalDemoBadge(text = "Saved on This Phone Only")
+      }
+
+      Text(
+        text = "What Showed Up in the Game?",
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface,
       )
-      WebAppConceptRow(
-        pillar = "2. 'I'm Stuck' Private Note & Rough-Week 3 Doors (Zero Guilt)",
-        detail = "Players have a private 'I'm Stuck' line to Coach Keith (1-business-day reply) and 3 rough-week doors (Light Week, Reset Focus, Talk to Coach) with nothing to make up.",
+      Text(
+        text = "Log a quick note after a game or scrimmage to track whether your weekly focus carried over. Notes stay on this phone.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
-      WebAppConceptRow(
-        pillar = "3. Post-Game Transfer Log & 'What's Changed Since Week 1'",
-        detail = "Logs what carried over into games (marked Carried Over / Partly / Not Yet by Coach Keith) and compares Week 1 vs. Week 4 clips side-by-side.",
+
+      OutlinedTextField(
+        value = opponentDraft,
+        onValueChange = { opponentDraft = it },
+        modifier = Modifier
+          .fillMaxWidth()
+          .testTag("game_transfer_opponent_input"),
+        label = { Text("Game or Scrimmage (e.g., Saturday League)") },
+        singleLine = true,
+        colors = OutlinedTextFieldDefaults.colors(
+          focusedBorderColor = BurntOrange,
+          focusedLabelColor = BurntOrange,
+          cursorColor = BurntOrange,
+        ),
       )
-      WebAppConceptRow(
-        pillar = "4. Parent Sunday Note, 3 Ride-Home Tips & Google Meet Check-Ins",
-        detail = "Parents receive 1 calm weekly sentence + 3 Do/Don't ride-home tips (no per-rep spam), alongside 20m First-Week & Development Google Meet check-ins.",
+
+      OutlinedTextField(
+        value = showedUpDraft,
+        onValueChange = { showedUpDraft = it },
+        modifier = Modifier
+          .fillMaxWidth()
+          .testTag("game_transfer_carried_input"),
+        label = { Text("What showed up from practice?") },
+        minLines = 2,
+        maxLines = 3,
+        colors = OutlinedTextFieldDefaults.colors(
+          focusedBorderColor = BurntOrange,
+          focusedLabelColor = BurntOrange,
+          cursorColor = BurntOrange,
+        ),
+      )
+
+      OutlinedTextField(
+        value = nextGameDraft,
+        onValueChange = { nextGameDraft = it },
+        modifier = Modifier
+          .fillMaxWidth()
+          .testTag("game_transfer_next_input"),
+        label = { Text("What do you want to notice earlier next game?") },
+        minLines = 1,
+        maxLines = 2,
+        colors = OutlinedTextFieldDefaults.colors(
+          focusedBorderColor = BurntOrange,
+          focusedLabelColor = BurntOrange,
+          cursorColor = BurntOrange,
+        ),
+      )
+
+      Button(
+        onClick = {
+          if (showedUpDraft.isNotBlank()) {
+            onAddEntry(
+              opponentDraft.trim().ifBlank { "Weekend Game" },
+              showedUpDraft.trim(),
+              nextGameDraft.trim(),
+            )
+            opponentDraft = ""
+            showedUpDraft = ""
+            nextGameDraft = ""
+          }
+        },
+        modifier = Modifier
+          .fillMaxWidth()
+          .defaultMinSize(minHeight = 48.dp)
+          .testTag("game_transfer_save_button"),
+        shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.buttonColors(
+          containerColor = BurntOrange,
+          contentColor = Color.White,
+        ),
+      ) {
+        Text(
+          text = "Save Game Note on Phone",
+          style = MaterialTheme.typography.labelLarge,
+          fontWeight = FontWeight.Bold,
+        )
+      }
+
+      if (entries.isNotEmpty()) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          entries.take(3).forEach { item ->
+            Surface(
+              modifier = Modifier
+                .fillMaxWidth()
+                .testTag("game_transfer_item_${item.id}"),
+              shape = MaterialTheme.shapes.medium,
+              color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            ) {
+              Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+              ) {
+                FlowRow(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                  Text(
+                    text = "${item.dateLabel} · ${item.opponent}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = NavyDeep,
+                    fontWeight = FontWeight.Bold,
+                  )
+                  FictionalDemoBadge(
+                    text = if (item.isSampleEntry) "Sample Entry" else "Saved on Phone",
+                  )
+                }
+                Text(
+                  text = item.whatShowedUp,
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (item.nextFocusInGames.isNotBlank()) {
+                  Text(
+                    text = "Next game: ${item.nextFocusInGames}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = BurntOrangeDark,
+                    fontWeight = FontWeight.Medium,
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * 5. Website Handoff Card on Account (`WebsiteHandoffLinksCard`).
+ * Replaces the Account audit card with short direct links for:
+ * - Family Access (`https://ballerpath.com/register`)
+ * - Book a Check-In (`https://ballerpath.com/book`)
+ * - Privacy (`https://ballerpath.com/privacy`)
+ * States clearly that two business days is the introduction review window and Coach Keith activates access separately.
+ */
+@Composable
+fun WebsiteHandoffLinksCard(
+  modifier: Modifier = Modifier,
+) {
+  val context = LocalContext.current
+
+  fun openWebsiteUrl(url: String) {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching { context.startActivity(intent) }
+  }
+
+  Card(
+    modifier = modifier
+      .fillMaxWidth()
+      .testTag("account_website_handoff_card"),
+    shape = MaterialTheme.shapes.large,
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
+  ) {
+    Column(
+      modifier = Modifier.padding(16.dp),
+      verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+      Text(
+        text = "BALLERPATH.COM · FAMILY HANDOFF",
+        style = MaterialTheme.typography.labelSmall,
+        color = BurntOrange,
+        fontWeight = FontWeight.Bold,
+      )
+      Text(
+        text = "Website Links & Next Steps",
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+      )
+      Text(
+        text = "Coach Keith reviews family introductions within 2 business days and activates access separately.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+
+      WebsiteDirectLinkRow(
+        title = "Family Access",
+        subtitle = "https://ballerpath.com/register",
+        contentDesc = "Open Family Access registration page at https://ballerpath.com/register",
+        testTag = "account_family_access_link",
+        onClick = { openWebsiteUrl("https://ballerpath.com/register") },
+      )
+
+      WebsiteDirectLinkRow(
+        title = "Book a Check-In",
+        subtitle = "https://ballerpath.com/book",
+        contentDesc = "Open Book a Check-In page at https://ballerpath.com/book",
+        testTag = "account_book_checkin_link",
+        onClick = { openWebsiteUrl("https://ballerpath.com/book") },
+      )
+
+      WebsiteDirectLinkRow(
+        title = "Privacy",
+        subtitle = "https://ballerpath.com/privacy",
+        contentDesc = "Open Privacy page at https://ballerpath.com/privacy",
+        testTag = "account_handoff_privacy_link",
+        onClick = { openWebsiteUrl("https://ballerpath.com/privacy") },
       )
     }
   }
 }
 
 @Composable
-private fun WebAppConceptRow(
-  pillar: String,
-  detail: String,
+private fun WebsiteDirectLinkRow(
+  title: String,
+  subtitle: String,
+  contentDesc: String,
+  testTag: String,
+  onClick: () -> Unit,
 ) {
-  Row(
-    modifier = Modifier.fillMaxWidth(),
-    verticalAlignment = Alignment.Top,
-  ) {
-    Icon(
-      imageVector = Icons.Outlined.Sync,
-      contentDescription = null,
-      tint = NavyDeep,
-      modifier = Modifier
-        .padding(top = 2.dp)
-        .size(16.dp),
-    )
-    Spacer(modifier = Modifier.width(8.dp))
-    Column {
-      Text(
-        text = pillar,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurface,
-        fontWeight = FontWeight.Bold,
+  Surface(
+    modifier = Modifier
+      .fillMaxWidth()
+      .defaultMinSize(minHeight = 48.dp)
+      .clickable(
+        interactionSource = remember { MutableInteractionSource() },
+        indication = ripple(),
+        onClick = onClick,
       )
-      Text(
-        text = detail,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      .semantics(mergeDescendants = true) {
+        contentDescription = contentDesc
+        role = Role.Button
+      }
+      .testTag(testTag),
+    shape = MaterialTheme.shapes.medium,
+    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+  ) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 12.dp, vertical = 10.dp),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+          text = title,
+          style = MaterialTheme.typography.titleSmall,
+          color = MaterialTheme.colorScheme.onSurface,
+          fontWeight = FontWeight.Bold,
+        )
+        Text(
+          text = subtitle,
+          style = MaterialTheme.typography.bodySmall,
+          color = BurntOrangeDark,
+          textDecoration = TextDecoration.Underline,
+        )
+      }
+      Icon(
+        imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+        contentDescription = null,
+        tint = BurntOrangeDark,
+        modifier = Modifier.size(18.dp),
       )
     }
   }

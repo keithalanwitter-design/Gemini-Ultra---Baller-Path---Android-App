@@ -32,12 +32,12 @@
     <string name="cd_parent_consent_continue">Continue to Baller Path after confirming parent or guardian permission</string>
     <string name="dev_stats_section_eyebrow">LAST 7 DAYS · PLAYER DEVELOPMENT</string>
     <string name="dev_stats_card_title">7-Day Court Work</string>
-    <string name="dev_stats_card_subtitle">Logged practice minutes from submitted work · Sample week excluded from totals</string>
+    <string name="dev_stats_card_subtitle">Logged reflection check-ins from submitted work · Sample week excluded from totals</string>
     <string name="dev_stats_badge_logged_only">Logged Work Only</string>
     <string name="dev_stats_total_label">7-Day Total</string>
     <string name="dev_stats_active_days_label">Active Days</string>
     <string name="dev_stats_best_day_label">Best Day</string>
-    <string name="cd_dev_stats_chart">7-day player development bar chart showing real logged practice minutes only, with sample week excluded from totals</string>
+    <string name="cd_dev_stats_chart">7-day player development bar chart showing real logged reflection check-ins only, with sample week excluded from totals</string>
     <string name="voice_journal_eyebrow">OPTIONAL ON-DEVICE VOICE NOTE</string>
     <string name="voice_journal_title">Record a Voice Note on This Device</string>
     <string name="voice_journal_subtitle">The microphone is optional. Voice notes stay on this device, and you can always type your reflection below.</string>

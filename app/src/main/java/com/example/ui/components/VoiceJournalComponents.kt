@@ -86,6 +86,46 @@ import java.util.Locale
 import kotlinx.coroutines.delay
 
 /**
+ * Coordinates microphone ownership across the app so MediaRecorder (voice note recording)
+ * and SpeechRecognizer (on-device voice-to-text dictation) NEVER run on the microphone at the same time.
+ */
+internal object ActiveMicrophoneArbitrator {
+  enum class MicOwner {
+    NONE,
+    MEDIA_RECORDER,
+    SPEECH_RECOGNIZER,
+  }
+
+  var currentOwner: MicOwner = MicOwner.NONE
+    private set
+
+  private var stopActiveOwnerCallback: (() -> Unit)? = null
+
+  fun acquireForMediaRecorder(onPreempted: () -> Unit) {
+    if (currentOwner != MicOwner.NONE) {
+      runCatching { stopActiveOwnerCallback?.invoke() }
+    }
+    currentOwner = MicOwner.MEDIA_RECORDER
+    stopActiveOwnerCallback = onPreempted
+  }
+
+  fun acquireForSpeechRecognizer(onPreempted: () -> Unit) {
+    if (currentOwner != MicOwner.NONE) {
+      runCatching { stopActiveOwnerCallback?.invoke() }
+    }
+    currentOwner = MicOwner.SPEECH_RECOGNIZER
+    stopActiveOwnerCallback = onPreempted
+  }
+
+  fun release(owner: MicOwner) {
+    if (currentOwner == owner) {
+      currentOwner = MicOwner.NONE
+      stopActiveOwnerCallback = null
+    }
+  }
+}
+
+/**
  * Checks whether strictly on-device speech recognition is available on this device (Android 12+).
  * Never falls back to a cloud-backed SpeechRecognizer.
  */
@@ -110,8 +150,8 @@ private fun createStrictOnDeviceRecognizer(context: Context): SpeechRecognizer? 
 }
 
 /**
- * Manages optional local voice note recording (MediaRecorder ONLY) and local playback
- * (MediaPlayer / TextToSpeech). Never runs MediaRecorder and SpeechRecognizer at the same time.
+ * Manages optional local voice note recording (MediaRecorder ONLY) and local offline playback
+ * (MediaPlayer / offline TextToSpeech). Never runs MediaRecorder and SpeechRecognizer at the same time.
  */
 private class OnDeviceAudioRecorderController(
   private val context: Context,
@@ -135,16 +175,21 @@ private class OnDeviceAudioRecorderController(
 
   /**
    * Starts hardware MediaRecorder ONLY if RECORD_AUDIO permission is granted.
+   * Preempts any active SpeechRecognizer first so both never share the microphone.
    * Returns true only if MediaRecorder actually started.
    */
-  fun startMediaRecordingIfPermitted(): Boolean {
+  fun startMediaRecordingIfPermitted(onPreemptedBySpeechRecognizer: () -> Unit): Boolean {
     val hasMicPermission = ContextCompat.checkSelfPermission(
       context,
       Manifest.permission.RECORD_AUDIO,
     ) == PackageManager.PERMISSION_GRANTED
     if (!hasMicPermission) return false
 
-    stopMediaRecorder()
+    ActiveMicrophoneArbitrator.acquireForMediaRecorder {
+      stopMediaRecorder()
+      onPreemptedBySpeechRecognizer()
+    }
+    stopMediaRecorder(releaseArbitrator = false)
     return runCatching {
       val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         MediaRecorder(context)
@@ -161,12 +206,12 @@ private class OnDeviceAudioRecorderController(
       mediaRecorder = recorder
       true
     }.getOrElse {
-      stopMediaRecorder()
+      stopMediaRecorder(releaseArbitrator = true)
       false
     }
   }
 
-  fun stopMediaRecorder() {
+  fun stopMediaRecorder(releaseArbitrator: Boolean = true) {
     runCatching {
       mediaRecorder?.apply {
         stop()
@@ -174,9 +219,16 @@ private class OnDeviceAudioRecorderController(
       }
     }
     mediaRecorder = null
+    if (releaseArbitrator) {
+      ActiveMicrophoneArbitrator.release(ActiveMicrophoneArbitrator.MicOwner.MEDIA_RECORDER)
+    }
   }
 
-  fun startPlayback(textToReadFallback: String, onFinished: () -> Unit): Boolean {
+  fun startPlayback(
+    textToReadFallback: String,
+    onOfflineVoiceUnavailable: () -> Unit = {},
+    onFinished: () -> Unit,
+  ): Boolean {
     stopPlayback()
     if (hasRecordedFile()) {
       val started = runCatching {
@@ -193,26 +245,91 @@ private class OnDeviceAudioRecorderController(
     }
 
     if (textToReadFallback.isNotBlank()) {
-      speakTextAloud(textToReadFallback)
-      return true
+      return speakTextAloudOfflineOnly(
+        text = textToReadFallback,
+        onOfflineUnavailable = onOfflineVoiceUnavailable,
+      )
     }
     return false
   }
 
-  private fun speakTextAloud(text: String) {
-    if (text.isBlank()) return
-    runCatching {
-      if (textToSpeech == null) {
+  /**
+   * Verifies that an offline TextToSpeech voice is available before speaking.
+   * Never uses network synthesis (`KEY_FEATURE_NETWORK_SYNTHESIS` or `isNetworkConnectionRequired`).
+   */
+  private fun selectAndSpeakOffline(
+    tts: TextToSpeech,
+    text: String,
+    onOfflineUnavailable: () -> Unit,
+  ): Boolean {
+    val targetLang = Locale.getDefault().language.ifBlank { Locale.US.language }
+    val availableVoices = runCatching { tts.voices }.getOrNull()
+    if (!availableVoices.isNullOrEmpty()) {
+      val offlineVoice = availableVoices.firstOrNull { voice ->
+        !voice.isNetworkConnectionRequired &&
+          voice.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NETWORK_SYNTHESIS) != true &&
+          (voice.locale?.language == targetLang || voice.locale?.language == Locale.ENGLISH.language)
+      } ?: availableVoices.firstOrNull { voice ->
+        !voice.isNetworkConnectionRequired &&
+          voice.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NETWORK_SYNTHESIS) != true
+      }
+
+      if (offlineVoice == null) {
+        onOfflineUnavailable()
+        return false
+      }
+      runCatching { tts.voice = offlineVoice }
+    } else {
+      val defaultVoice = runCatching { tts.defaultVoice }.getOrNull()
+      if (defaultVoice != null &&
+        (defaultVoice.isNetworkConnectionRequired ||
+          defaultVoice.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NETWORK_SYNTHESIS) == true)
+      ) {
+        onOfflineUnavailable()
+        return false
+      }
+      runCatching { tts.language = Locale.getDefault() }
+    }
+
+    val offlineParams = Bundle().apply {
+      putString(TextToSpeech.Engine.KEY_FEATURE_NETWORK_SYNTHESIS, "false")
+    }
+    val result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, offlineParams, "bp_voice_$sessionKey")
+    if (result == TextToSpeech.ERROR) {
+      onOfflineUnavailable()
+      return false
+    }
+    return true
+  }
+
+  private fun speakTextAloudOfflineOnly(
+    text: String,
+    onOfflineUnavailable: () -> Unit,
+  ): Boolean {
+    if (text.isBlank()) return false
+    return runCatching {
+      val existing = textToSpeech
+      if (existing == null) {
         textToSpeech = TextToSpeech(context.applicationContext) { status ->
           if (status == TextToSpeech.SUCCESS) {
             isTtsReady = true
-            textToSpeech?.language = Locale.getDefault()
-            textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "bp_voice_$sessionKey")
+            textToSpeech?.let { readyTts ->
+              selectAndSpeakOffline(readyTts, text, onOfflineUnavailable)
+            }
+          } else {
+            isTtsReady = false
+            onOfflineUnavailable()
           }
         }
+        true
       } else if (isTtsReady) {
-        textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "bp_voice_$sessionKey")
+        selectAndSpeakOffline(existing, text, onOfflineUnavailable)
+      } else {
+        false
       }
+    }.getOrElse {
+      onOfflineUnavailable()
+      false
     }
   }
 
@@ -382,7 +499,11 @@ fun VoiceRecorderStudioCard(
     isPlayingBack = false
     controller.stopPlayback()
     recordingSeconds = 0
-    val started = controller.startMediaRecordingIfPermitted()
+    val started = controller.startMediaRecordingIfPermitted(
+      onPreemptedBySpeechRecognizer = {
+        isRecording = false
+      }
+    )
     if (started) {
       isRecording = true
       statusMessage = null
@@ -742,13 +863,16 @@ fun CoachFeedbackStudioSection(
   var validationError by rememberSaveable(assignmentId) { mutableStateOf<String?>(null) }
   var speechRecognizerRef by remember { mutableStateOf<SpeechRecognizer?>(null) }
 
-  fun stopCoachRecognizer() {
+  fun stopCoachRecognizer(releaseArbitrator: Boolean = true) {
     runCatching {
       speechRecognizerRef?.stopListening()
       speechRecognizerRef?.destroy()
     }
     speechRecognizerRef = null
     isDictatingCoachVoice = false
+    if (releaseArbitrator) {
+      ActiveMicrophoneArbitrator.release(ActiveMicrophoneArbitrator.MicOwner.SPEECH_RECOGNIZER)
+    }
   }
 
   DisposableEffect(assignmentId) {
@@ -758,8 +882,11 @@ fun CoachFeedbackStudioSection(
   }
 
   fun startStrictOnDeviceCoachDictation() {
+    ActiveMicrophoneArbitrator.acquireForSpeechRecognizer {
+      stopCoachRecognizer(releaseArbitrator = false)
+    }
     if (!isOnDeviceSpeechAvailable(context)) {
-      isDictatingCoachVoice = false
+      stopCoachRecognizer()
       statusMessage = sttUnavailableMessage
       return
     }
@@ -775,10 +902,12 @@ fun CoachFeedbackStudioSection(
           override fun onBufferReceived(buffer: ByteArray?) = Unit
           override fun onEndOfSpeech() {
             isDictatingCoachVoice = false
+            ActiveMicrophoneArbitrator.release(ActiveMicrophoneArbitrator.MicOwner.SPEECH_RECOGNIZER)
           }
 
           override fun onError(error: Int) {
             isDictatingCoachVoice = false
+            ActiveMicrophoneArbitrator.release(ActiveMicrophoneArbitrator.MicOwner.SPEECH_RECOGNIZER)
             statusMessage = sttFailedMessage
           }
 
@@ -799,6 +928,7 @@ fun CoachFeedbackStudioSection(
               statusMessage = sttFailedMessage
             }
             isDictatingCoachVoice = false
+            ActiveMicrophoneArbitrator.release(ActiveMicrophoneArbitrator.MicOwner.SPEECH_RECOGNIZER)
           }
 
           override fun onPartialResults(partialResults: Bundle?) {
@@ -835,7 +965,7 @@ fun CoachFeedbackStudioSection(
       isDictatingCoachVoice = true
       statusMessage = null
     } else {
-      isDictatingCoachVoice = false
+      stopCoachRecognizer()
       statusMessage = sttUnavailableMessage
     }
   }
@@ -1186,10 +1316,16 @@ fun CoachAudioListenButton(
         controller.stopPlayback()
         isSpeaking = false
       } else {
-        isSpeaking = true
-        controller.startPlayback(textToSpeak) {
-          isSpeaking = false
-        }
+        val started = controller.startPlayback(
+          textToReadFallback = textToSpeak,
+          onOfflineVoiceUnavailable = {
+            isSpeaking = false
+          },
+          onFinished = {
+            isSpeaking = false
+          },
+        )
+        isSpeaking = started
       }
     },
     modifier = modifier
@@ -1300,7 +1436,7 @@ fun ReflectionSpeechToTextMicButton(
     }
   }
 
-  fun stopRecognizer() {
+  fun stopRecognizer(releaseArbitrator: Boolean = true) {
     runCatching {
       speechRecognizerRef?.stopListening()
       speechRecognizerRef?.destroy()
@@ -1308,9 +1444,16 @@ fun ReflectionSpeechToTextMicButton(
     speechRecognizerRef = null
     isListening = false
     onListeningChanged(false)
+    if (releaseArbitrator) {
+      ActiveMicrophoneArbitrator.release(ActiveMicrophoneArbitrator.MicOwner.SPEECH_RECOGNIZER)
+    }
   }
 
   fun startOnDeviceSpeechRecognizer(initialBaseText: String) {
+    ActiveMicrophoneArbitrator.acquireForSpeechRecognizer {
+      stopRecognizer(releaseArbitrator = false)
+    }
+
     if (!isOnDeviceSpeechAvailable(context)) {
       stopRecognizer()
       onStatusMessageChanged(sttUnavailableMessage)
@@ -1337,11 +1480,13 @@ fun ReflectionSpeechToTextMicButton(
           override fun onEndOfSpeech() {
             isListening = false
             onListeningChanged(false)
+            ActiveMicrophoneArbitrator.release(ActiveMicrophoneArbitrator.MicOwner.SPEECH_RECOGNIZER)
           }
 
           override fun onError(error: Int) {
             isListening = false
             onListeningChanged(false)
+            ActiveMicrophoneArbitrator.release(ActiveMicrophoneArbitrator.MicOwner.SPEECH_RECOGNIZER)
             onStatusMessageChanged(sttFailedMessage)
           }
 
@@ -1359,6 +1504,7 @@ fun ReflectionSpeechToTextMicButton(
             }
             isListening = false
             onListeningChanged(false)
+            ActiveMicrophoneArbitrator.release(ActiveMicrophoneArbitrator.MicOwner.SPEECH_RECOGNIZER)
           }
 
           override fun onPartialResults(partialResults: Bundle?) {

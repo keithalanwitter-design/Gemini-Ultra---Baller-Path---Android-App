@@ -8,24 +8,21 @@ import androidx.lifecycle.viewModelScope
 import androidx.savedstate.SavedStateRegistryOwner
 import com.example.data.model.AssignmentStatus
 import com.example.data.model.AssignmentWorkItem
-import com.example.data.model.BallerPathLoopStage
 import com.example.data.model.CoachAssignment
+import com.example.data.model.CoachCheckInMeetingType
+import com.example.data.model.CoachCheckInState
 import com.example.data.model.DailyDevelopmentStat
 import com.example.data.model.DevelopmentPlan
-import com.example.data.model.GradeBandPathway
+import com.example.data.model.GameCarryoverEntry
 import com.example.data.model.ParentConsentState
 import com.example.data.model.PlanSession
 import com.example.data.model.PlayerProfile
 import com.example.data.model.PlayerSetupState
 import com.example.data.model.PracticeReflection
-import com.example.data.model.PracticeScopeSpec
 import com.example.data.model.SetupStage
 import com.example.data.model.SimulatedFamilyProfile
-import com.example.data.model.TacticalChatMessage
+import com.example.data.model.TeachBackEntry
 import com.example.data.model.TodayFocus
-import com.example.data.model.TrainingProgramTrack
-import com.example.data.model.VideoFilmSubmission
-import com.example.data.model.WelcomeGoalChallengeState
 import com.example.data.model.WorkflowScenarioId
 import com.example.data.repository.BallerPathRepository
 import com.example.data.sample.SampleDataSource
@@ -70,11 +67,9 @@ data class BallerPathUiState(
   val practice: PracticeSessionUiState = PracticeSessionUiState(),
   val demoStatusMessage: String? = null,
   val isMoreWorkReadyPreview: Boolean = false,
-  val welcomeGoalState: WelcomeGoalChallengeState = WelcomeGoalChallengeState(),
-  val practiceScopes: List<PracticeScopeSpec> = SampleDataSource.defaultPracticeScopes,
-  val videoSubmissions: List<VideoFilmSubmission> = SampleDataSource.defaultVideoSubmissions(),
-  val tacticalMessages: List<TacticalChatMessage> = SampleDataSource.defaultTacticalMessages(),
-  val isCoachPortalMode: Boolean = false,
+  val checkInState: CoachCheckInState = CoachCheckInState(),
+  val teachBackEntry: TeachBackEntry = TeachBackEntry(),
+  val gameCarryoverEntries: List<GameCarryoverEntry> = SampleDataSource.sampleGameCarryoverEntries,
 ) {
   val personalWorkItems: List<AssignmentWorkItem>
     get() = assignments
@@ -96,7 +91,7 @@ data class BallerPathUiState(
   val seedReflections: List<PracticeReflection>
     get() = reflections.filter { it.isSampleSeed }
 
-  // B1 & B2 Today selection priority
+  // Today selection priority
   val todayAssignmentItem: AssignmentWorkItem?
     get() = when (setupState.setupStage) {
       SetupStage.SETUP_IN_PROGRESS -> null
@@ -254,14 +249,6 @@ data class BallerPathUiState(
       assignments = assignments,
       reflections = reflections,
     )
-
-  val activeLoopStage: BallerPathLoopStage
-    get() = when (currentScenario) {
-      WorkflowScenarioId.READY, WorkflowScenarioId.MORE_WORK_READY -> BallerPathLoopStage.FOCUS
-      WorkflowScenarioId.IN_PROGRESS -> BallerPathLoopStage.PRACTICE
-      WorkflowScenarioId.DRAFT, WorkflowScenarioId.AWAITING_COACH -> BallerPathLoopStage.REFLECT
-      WorkflowScenarioId.FEEDBACK_READY -> BallerPathLoopStage.ADJUST
-    }
 }
 
 class BallerPathViewModel(
@@ -290,11 +277,9 @@ class BallerPathViewModel(
   private val demoStatusMessage = MutableStateFlow<String?>(null)
   private val moreWorkReadyPreview = MutableStateFlow(false)
   private val seeded = MutableStateFlow(false)
-  private val welcomeGoalState = MutableStateFlow(WelcomeGoalChallengeState())
-  private val practiceScopes = MutableStateFlow(SampleDataSource.defaultPracticeScopes)
-  private val videoSubmissions = MutableStateFlow(SampleDataSource.defaultVideoSubmissions())
-  private val tacticalMessages = MutableStateFlow(SampleDataSource.defaultTacticalMessages())
-  private val isCoachPortalMode = MutableStateFlow(false)
+  private val checkInState = MutableStateFlow(CoachCheckInState())
+  private val teachBackEntry = MutableStateFlow(TeachBackEntry())
+  private val gameCarryoverEntries = MutableStateFlow(SampleDataSource.sampleGameCarryoverEntries)
   private var timerJob: Job? = null
 
   init {
@@ -341,14 +326,12 @@ class BallerPathViewModel(
     }
   }
 
-  private val overhaulStateFlow = combine(
-    welcomeGoalState,
-    practiceScopes,
-    videoSubmissions,
-    tacticalMessages,
-    isCoachPortalMode,
-  ) { welcome, scopes, videos, messages, coachMode ->
-    listOf(welcome, scopes, videos, messages, coachMode)
+  private val pilotLocalNotesFlow = combine(
+    checkInState,
+    teachBackEntry,
+    gameCarryoverEntries,
+  ) { checkIn, teachBack, gameEntries ->
+    Triple(checkIn, teachBack, gameEntries)
   }
 
   val uiState: StateFlow<BallerPathUiState> = combine(
@@ -368,7 +351,7 @@ class BallerPathViewModel(
     ) { practice, consent, statusMsg, moreWork, isSeeded ->
       listOf(practice, consent, statusMsg, moreWork, isSeeded)
     },
-    overhaulStateFlow,
+    pilotLocalNotesFlow,
   ) { values ->
     @Suppress("UNCHECKED_CAST")
     val player = values[0] as PlayerProfile
@@ -389,15 +372,7 @@ class BallerPathViewModel(
     val isMoreWork = extra[3] as Boolean
     val isSeeded = extra[4] as Boolean
     @Suppress("UNCHECKED_CAST")
-    val overhaul = values[8] as List<Any?>
-    val welcome = overhaul[0] as WelcomeGoalChallengeState
-    @Suppress("UNCHECKED_CAST")
-    val scopes = overhaul[1] as List<PracticeScopeSpec>
-    @Suppress("UNCHECKED_CAST")
-    val videos = overhaul[2] as List<VideoFilmSubmission>
-    @Suppress("UNCHECKED_CAST")
-    val messages = overhaul[3] as List<TacticalChatMessage>
-    val coachMode = overhaul[4] as Boolean
+    val pilotNotes = values[8] as Triple<CoachCheckInState, TeachBackEntry, List<GameCarryoverEntry>>
 
     BallerPathUiState(
       isLoading = !isSeeded,
@@ -412,11 +387,9 @@ class BallerPathViewModel(
       practice = practice,
       demoStatusMessage = statusMsg,
       isMoreWorkReadyPreview = isMoreWork,
-      welcomeGoalState = welcome,
-      practiceScopes = scopes,
-      videoSubmissions = videos,
-      tacticalMessages = messages,
-      isCoachPortalMode = coachMode,
+      checkInState = pilotNotes.first,
+      teachBackEntry = pilotNotes.second,
+      gameCarryoverEntries = pilotNotes.third,
     )
   }.stateIn(
     scope = viewModelScope,
@@ -496,10 +469,6 @@ class BallerPathViewModel(
     }
   }
 
-  /**
-   * Steps backward within the active assignment's drill.
-   * Returns true if handled internally, or false if on Step 1 and ready to exit to Today.
-   */
   fun stepBackInPractice(): Boolean {
     stopTimerInternal(persistToRoom = true)
     val current = practiceState.value
@@ -670,404 +639,64 @@ class BallerPathViewModel(
       )
       practiceState.value = cleanState
       persistToSavedStateHandle(cleanState)
-      welcomeGoalState.update { state ->
-        state.copy(
-          completedMilestonesCount = state.completedMilestonesCount + 1,
-          latestCelebrationHeadline = "Congratulations, Maya! '${assignment.title}' reflection sent to Coach Keith.",
-          latestNextSentencePrompt = "Finish the sentence: Attach your practice film clip or message Coach Keith a question about '${assignment.title}'.",
-        )
-      }
       onSubmitted()
     }
   }
 
-  fun selectWelcomeGoal(goal: String) {
-    if (goal.isBlank()) return
-    welcomeGoalState.update { current ->
+  fun selectCheckInMeetingType(meetingType: CoachCheckInMeetingType) {
+    checkInState.update { current ->
+      current.copy(selectedMeetingType = meetingType)
+    }
+  }
+
+  fun toggleCheckInAgendaTopic(topic: String) {
+    checkInState.update { current ->
+      val updatedTopics = if (topic in current.selectedAgendaTopics) {
+        current.selectedAgendaTopics - topic
+      } else {
+        current.selectedAgendaTopics + topic
+      }
+      current.copy(selectedAgendaTopics = updatedTopics)
+    }
+  }
+
+  fun saveLocalCheckInCallNote(note: String) {
+    checkInState.update { current ->
       current.copy(
-        selectedGoal = goal.trim(),
-        latestNextSentencePrompt = "Goal updated: \"${goal.trim()}\". Tap 'I'm Up for the Challenge' to lock it in for Coach Keith!",
+        localNoteForCall = note.trim(),
+        isLocalNoteSaved = true,
       )
     }
   }
 
-  fun acceptWelcomeChallenge() {
-    welcomeGoalState.update { current ->
-      val nextCount = if (current.isChallengeAccepted) current.completedMilestonesCount else current.completedMilestonesCount + 1
-      current.copy(
-        isChallengeAccepted = true,
-        completedMilestonesCount = nextCount,
-        latestCelebrationHeadline = "Challenge Accepted! Maya is locked in on today's tactical goal.",
-        latestNextSentencePrompt = "Next sentence in your flow: Start today's 8-minute scope of work or attach a court video clip for Coach Keith.",
-      )
-    }
-  }
-
-  fun setCoachPortalMode(enabled: Boolean) {
-    isCoachPortalMode.value = enabled
-  }
-
-  fun selectGradeBandPathway(gradeBand: GradeBandPathway) {
-    welcomeGoalState.update { current ->
-      current.copy(
-        gradeBand = gradeBand,
-        selectedGoal = gradeBand.focusSummary,
-        latestCelebrationHeadline = "Pathway Updated: ${gradeBand.label}",
-        latestNextSentencePrompt = "Website & App synced to ${gradeBand.label}: \"${gradeBand.focusSummary}\"",
-      )
-    }
-  }
-
-  fun selectTrainingProgramTrack(track: TrainingProgramTrack) {
-    welcomeGoalState.update { current ->
-      current.copy(
-        programTrack = track,
-        latestCelebrationHeadline = "Program Track Aligned: ${track.label}",
-        latestNextSentencePrompt = "${track.subtitle} — your weekly scopes and check-ins now mirror this track.",
-      )
-    }
-  }
-
-  fun saveCheckInPreparation(
-    checkInType: String,
-    agendaTopics: List<String>,
-    confidenceRating: Int,
-    familyQuestionNote: String,
-  ) {
-    welcomeGoalState.update { current ->
-      val updatedCheckIn = current.checkInState.copy(
-        selectedCheckInType = checkInType,
-        selectedAgendaTopics = agendaTopics.ifEmpty { current.checkInState.selectedAgendaTopics },
-        confidenceRating = confidenceRating.coerceIn(1, 5),
-        familyQuestionNote = familyQuestionNote.trim(),
-        isCheckInPrepSaved = true,
-      )
-      current.copy(
-        checkInState = updatedCheckIn,
-        completedMilestonesCount = current.completedMilestonesCount + 1,
-        latestCelebrationHeadline = "Check-In Agenda Saved for Coach Keith ($checkInType)!",
-        latestNextSentencePrompt = "Your pre-call agenda & ${confidenceRating}/5 confidence rating are ready for your live Google Meet check-in with Coach Keith.",
-      )
-    }
-  }
-
-  fun selectRoughWeekChoice(choice: com.example.data.model.RoughWeekChoice) {
-    welcomeGoalState.update { current ->
-      current.copy(
-        roughWeekChoice = choice,
-        latestCelebrationHeadline = when (choice) {
-          com.example.data.model.RoughWeekChoice.NONE -> "Weekly Rhythm Active"
-          com.example.data.model.RoughWeekChoice.LIGHT_WEEK -> "Light Week Selected — Nothing to Make Up"
-          com.example.data.model.RoughWeekChoice.RESET_FOCUS -> "Focus Reset Requested for Coach Keith"
-          com.example.data.model.RoughWeekChoice.TALK_TO_COACH -> "Note Queued for Coach Keith"
-        },
-        latestNextSentencePrompt = choice.note,
-      )
-    }
-  }
-
-  fun submitPlayerTeachBack(
+  fun saveLocalTeachBack(
     whatWillDoDifferently: String,
     whatWillNotice: String,
   ) {
-    val cleanChange = whatWillDoDifferently.trim()
-    if (cleanChange.isEmpty()) return
-    welcomeGoalState.update { current ->
+    teachBackEntry.update { current ->
       current.copy(
-        teachBackEntry = current.teachBackEntry.copy(
-          whatWillDoDifferently = cleanChange,
-          whatWillNotice = whatWillNotice.trim(),
-          isSubmittedByPlayer = true,
-          coachMark = "unmarked",
-        ),
-        completedMilestonesCount = current.completedMilestonesCount + 1,
-        latestCelebrationHeadline = "Teach-Back ('In Your Words') Sent to Coach Keith!",
-        latestNextSentencePrompt = "Coach Keith will mark 'Got it' or open a quick clarification note. Your next rep never waits!",
+        whatWillDoDifferently = whatWillDoDifferently.trim(),
+        whatWillNotice = whatWillNotice.trim(),
+        isSavedLocally = true,
       )
     }
   }
 
-  fun markCoachTeachBack(
-    mark: String,
-    clarifyNote: String,
-  ) {
-    welcomeGoalState.update { current ->
-      current.copy(
-        teachBackEntry = current.teachBackEntry.copy(
-          coachMark = mark,
-          coachClarifyNote = clarifyNote.trim().ifEmpty {
-            if (mark == "got-it") "Got it ✓ — eyes up before the catch is the exact key."
-            else "Close! Make sure your eyes scan the rim before the ball touches your hands."
-          },
-        ),
-        latestCelebrationHeadline = if (mark == "got-it") {
-          "Coach Keith Marked Teach-Back: Got It ✓"
-        } else {
-          "Coach Keith Added a Quick Teach-Back Clarification"
-        },
-      )
-    }
-  }
-
-  fun submitStuckPrivateNote(
-    whatHappened: String,
-    whatWouldHelp: String,
-    howFeeling: String,
-  ) {
-    if (whatHappened.isBlank() && whatWouldHelp.isBlank() && howFeeling.isBlank()) return
-    welcomeGoalState.update { current ->
-      current.copy(
-        stuckNote = current.stuckNote.copy(
-          whatHappened = whatHappened.trim(),
-          whatWouldHelp = whatWouldHelp.trim(),
-          howFeeling = howFeeling.trim(),
-          isSent = true,
-        ),
-        latestCelebrationHeadline = "Private 'I'm Stuck' Note Sent to Coach Keith",
-        latestNextSentencePrompt = "Only Coach Keith sees this private note. He writes back himself within 1 business day.",
-      )
-    }
-  }
-
-  fun logGameTransferNote(
+  fun addLocalGameCarryoverEntry(
     opponent: String,
-    carriedOver: String,
-    didntYet: String,
-    feelLabel: String,
+    whatShowedUp: String,
+    nextFocusInGames: String,
   ) {
-    val cleanCarried = carriedOver.trim()
-    if (cleanCarried.isEmpty()) return
-    val newNote = com.example.data.model.GameTransferNote(
+    if (whatShowedUp.isBlank()) return
+    val newEntry = GameCarryoverEntry(
       id = "game_${System.currentTimeMillis()}",
-      dateLabel = if (opponent.isNotBlank()) "Today · vs ${opponent.trim()}" else "Today · Scrimmage / Game",
-      opponent = opponent.trim(),
-      carriedOver = cleanCarried,
-      didntYet = didntYet.trim(),
-      feelLabel = feelLabel.ifBlank { "Good" },
-      coachMark = "unread",
+      dateLabel = "Saved on Phone",
+      opponent = opponent.trim().ifBlank { "Weekend Game" },
+      whatShowedUp = whatShowedUp.trim(),
+      nextFocusInGames = nextFocusInGames.trim(),
+      isSampleEntry = false,
     )
-    welcomeGoalState.update { current ->
-      current.copy(
-        gameTransferNotes = listOf(newNote) + current.gameTransferNotes,
-        completedMilestonesCount = current.completedMilestonesCount + 1,
-        latestCelebrationHeadline = "Post-Game Transfer Note Saved for Coach Keith!",
-        latestNextSentencePrompt = "Practice builds it. Games show it. Coach Keith reads every game note and marks what carried over.",
-      )
-    }
-  }
-
-  fun markCoachGameNote(
-    gameId: String,
-    coachMark: String,
-    coachNote: String,
-  ) {
-    welcomeGoalState.update { current ->
-      val updatedGames = current.gameTransferNotes.map { g ->
-        if (g.id == gameId) {
-          g.copy(
-            coachMark = coachMark,
-            coachNote = coachNote.trim().ifEmpty {
-              "Read by Coach Keith — keep building that pre-catch scan under game pressure."
-            },
-            isTaggedWin = coachMark == "carried",
-          )
-        } else {
-          g
-        }
-      }
-      current.copy(
-        gameTransferNotes = updatedGames,
-        latestCelebrationHeadline = "Coach Keith Marked Game Note: ${coachMark.uppercase()}",
-      )
-    }
-  }
-
-  fun publishNewScopeOfWork(
-    title: String,
-    tacticalObjective: String,
-    repBreakdown: String,
-    requiredFilmAngle: String,
-    successStandard: String,
-    durationMinutes: Int = 10,
-  ): PracticeScopeSpec? {
-    val cleanTitle = title.trim()
-    val cleanObjective = tacticalObjective.trim()
-    if (cleanTitle.isEmpty() || cleanObjective.isEmpty()) return null
-
-    val scopeId = "scope_custom_${System.currentTimeMillis()}"
-    val newScope = PracticeScopeSpec(
-      scopeId = scopeId,
-      sessionId = scopeId,
-      assignmentId = SampleDataSource.ASSIGNMENT_PASS_LOOK_DECIDE,
-      title = cleanTitle,
-      weekDayBadge = "COACH KEITH PUBLISHED · NEW SCOPE OF WORK",
-      durationMinutes = durationMinutes.coerceIn(5, 45),
-      tacticalObjective = cleanObjective,
-      repBreakdown = repBreakdown.trim().ifEmpty {
-        "Phase 1 (3m): Footwork & vision prep • Phase 2 (4m): Game-speed decision reps • Phase 3 (3m): Film & reflection check."
-      },
-      requiredFilmAngle = requiredFilmAngle.trim().ifEmpty {
-        "Wing / 45° Slot Camera — keep ball-handler, cutter, and help defender in frame."
-      },
-      successStandard = successStandard.trim().ifEmpty {
-        "Read the help defender's chest before making your cut or relocation decision."
-      },
-      status = "Active Scope",
-    )
-    practiceScopes.update { current -> listOf(newScope) + current }
-    welcomeGoalState.update { state ->
-      state.copy(
-        latestCelebrationHeadline = "New Scope of Work Published by Coach Keith: $cleanTitle",
-        latestNextSentencePrompt = "Coach Keith added '$cleanTitle' to your Plan. Review the rep breakdown and required film angle!",
-      )
-    }
-    return newScope
-  }
-
-  fun submitPracticeVideo(
-    assignmentId: String,
-    drillTitle: String,
-    videoUri: String,
-    cameraAngleTag: String,
-    playerNote: String,
-  ): VideoFilmSubmission {
-    val cleanNote = playerNote.trim().ifEmpty {
-      "Focused on keeping my chin up and reading the help defender's chest on every rep."
-    }
-    val submission = VideoFilmSubmission(
-      videoId = "vid_${System.currentTimeMillis()}",
-      assignmentId = assignmentId,
-      drillTitle = drillTitle,
-      videoUri = videoUri.ifBlank { "content://com.ballerpath.app/court_clip_${System.currentTimeMillis()}.mp4" },
-      cameraAngleTag = cameraAngleTag.ifBlank { "Wing / Corner Read (0:18)" },
-      durationLabel = "0:18 · Court Practice Clip",
-      playerNote = cleanNote,
-      status = "awaiting_critique",
-      createdAtMillis = System.currentTimeMillis(),
-    )
-    videoSubmissions.update { current -> listOf(submission) + current }
-    welcomeGoalState.update { state ->
-      state.copy(
-        completedMilestonesCount = state.completedMilestonesCount + 1,
-        latestCelebrationHeadline = "Congratulations! Practice film attached for '$drillTitle' ($cameraAngleTag).",
-        latestNextSentencePrompt = "Your video is queued for Coach Keith's timestamped breakdown. Send him a quick note below about which rep felt sharpest!",
-      )
-    }
-    return submission
-  }
-
-  fun saveCoachVideoCritique(
-    videoId: String,
-    coachCritique: String,
-    timestampNotes: String,
-    nextRepAdjustment: String,
-  ): VideoFilmSubmission? {
-    val cleanCritique = coachCritique.trim()
-    val cleanTimestamps = timestampNotes.trim()
-    val cleanNextRep = nextRepAdjustment.trim()
-    if (cleanCritique.isEmpty()) return null
-
-    var updatedItem: VideoFilmSubmission? = null
-    videoSubmissions.update { list ->
-      list.map { item ->
-        if (item.videoId == videoId) {
-          val modified = item.copy(
-            status = "critiqued",
-            coachCritique = cleanCritique,
-            timestampNotes = cleanTimestamps.ifEmpty {
-              "[0:04] Balanced catch-and-scan • [0:11] Clean relocation angle away from help defender"
-            },
-            nextRepAdjustment = cleanNextRep.ifEmpty {
-              "Hold your corner spacing window for one full count before lifting to the wing."
-            },
-          )
-          updatedItem = modified
-          modified
-        } else {
-          item
-        }
-      }
-    }
-    if (updatedItem != null) {
-      welcomeGoalState.update { state ->
-        state.copy(
-          completedMilestonesCount = state.completedMilestonesCount + 1,
-          latestCelebrationHeadline = "Coach Keith Critiqued Your Film: '${updatedItem?.drillTitle}'!",
-          latestNextSentencePrompt = "Next sentence: Read Coach Keith's timestamped notes and reply in the message thread to confirm your next-rep adjustment.",
-        )
-      }
-    }
-    return updatedItem
-  }
-
-  fun sendTacticalMessage(
-    senderRole: String,
-    text: String,
-    relatedTitle: String = "Pass, Look, Decide",
-  ): TacticalChatMessage? {
-    val cleanText = text.trim()
-    if (cleanText.isEmpty()) return null
-    val isCoach = senderRole == "coach"
-    val msg = TacticalChatMessage(
-      messageId = "msg_${System.currentTimeMillis()}",
-      senderRole = if (isCoach) "coach" else "player",
-      senderName = if (isCoach) "Coach Keith" else "Maya Brooks (#14)",
-      text = cleanText,
-      relatedTitle = relatedTitle,
-      createdAtMillis = System.currentTimeMillis(),
-    )
-    tacticalMessages.update { current -> current + msg }
-    welcomeGoalState.update { state ->
-      if (isCoach) {
-        state.copy(
-          latestCelebrationHeadline = "New Tactical Note from Coach Keith!",
-          latestNextSentencePrompt = "Coach Keith replied on '$relatedTitle': \"${cleanText.take(70)}...\" — apply this cue on your next court rep!",
-        )
-      } else {
-        state.copy(
-          latestCelebrationHeadline = "Message Sent to Coach Keith!",
-          latestNextSentencePrompt = "Great communication, Maya! While Coach Keith reviews your note, check your 3-step Scope of Work or attach a video clip.",
-        )
-      }
-    }
-    return msg
-  }
-
-  fun syncCloudScopes(cloudScopes: List<PracticeScopeSpec>) {
-    if (cloudScopes.isEmpty()) return
-    practiceScopes.update { existing ->
-      val byId = existing.associateBy { it.scopeId }.toMutableMap()
-      cloudScopes.forEach { byId[it.scopeId] = it }
-      byId.values.toList()
-    }
-  }
-
-  fun syncCloudVideos(cloudVideos: List<VideoFilmSubmission>) {
-    if (cloudVideos.isEmpty()) return
-    videoSubmissions.update { existing ->
-      val byId = existing.associateBy { it.videoId }.toMutableMap()
-      cloudVideos.forEach { byId[it.videoId] = it }
-      byId.values.sortedByDescending { it.createdAtMillis }
-    }
-  }
-
-  fun syncCloudMessages(cloudMsgs: List<TacticalChatMessage>) {
-    if (cloudMsgs.isEmpty()) return
-    tacticalMessages.update { existing ->
-      val byId = existing.associateBy { it.messageId }.toMutableMap()
-      cloudMsgs.forEach { byId[it.messageId] = it }
-      byId.values.sortedBy { it.createdAtMillis }
-    }
-  }
-
-  fun syncCloudGoalState(goal: String, accepted: Boolean, streakCount: Int) {
-    welcomeGoalState.update { current ->
-      current.copy(
-        selectedGoal = goal.ifBlank { current.selectedGoal },
-        isChallengeAccepted = accepted,
-        completedMilestonesCount = streakCount.coerceAtLeast(current.completedMilestonesCount),
-      )
-    }
+    gameCarryoverEntries.update { existing -> listOf(newEntry) + existing }
   }
 
   fun revealSampleCoachResponse(reflectionId: Long) {
@@ -1137,11 +766,9 @@ class BallerPathViewModel(
   fun resetDemoData() {
     stopTimerInternal(persistToRoom = false)
     moreWorkReadyPreview.value = false
-    welcomeGoalState.value = WelcomeGoalChallengeState()
-    practiceScopes.value = SampleDataSource.defaultPracticeScopes
-    videoSubmissions.value = SampleDataSource.defaultVideoSubmissions()
-    tacticalMessages.value = SampleDataSource.defaultTacticalMessages()
-    isCoachPortalMode.value = false
+    checkInState.value = CoachCheckInState()
+    teachBackEntry.value = TeachBackEntry()
+    gameCarryoverEntries.value = SampleDataSource.sampleGameCarryoverEntries
     viewModelScope.launch {
       repository.resetDemoData()
       val storedAssignments = repository.observeAssignments().first()
